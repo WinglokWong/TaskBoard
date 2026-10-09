@@ -25,10 +25,27 @@ The app's interface is in Chinese (app name: 任务看板).
 - **Search**: filter cards by title or description from the toolbar.
 - **Auto-save**: changes are written to disk automatically.
 
-## Requirements
+## Download & install
+
+1. Download `TaskBoard-x.y.z.dmg` from the [latest release](https://github.com/WinglokWong/TaskBoard/releases/latest).
+2. Open the DMG and drag **任务看板** into **Applications**.
+3. Open the app for the first time:
+   - TaskBoard is not notarized by Apple, so macOS blocks it the first time with "Apple could not verify…".
+   - Click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to the TaskBoard message.
+   - Confirm, and the app opens. You only need to do this once.
+
+   Alternatively, run this once in Terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/任务看板.app"
+   ```
+
+Runs on macOS 14 Sonoma or later, on both Apple Silicon and Intel Macs.
+
+## Requirements (for building)
 
 - macOS 14 Sonoma or later
-- Xcode 16 / Swift 6 toolchain (to build)
+- Xcode 16 / Swift 6 toolchain
 
 ## Build
 
@@ -36,15 +53,21 @@ The app's interface is in Chinese (app name: 任务看板).
 ./build.sh
 ```
 
-This compiles a release build, generates the app icon and packages everything into `build/任务看板.app` (ad-hoc signed). Drag it into `/Applications` to install.
+This compiles a universal (arm64 + x86_64) release build, generates the app icon and packages everything into `build/任务看板.app` (ad-hoc signed). Drag it into `/Applications` to install.
+
+To produce a distributable DMG:
+
+```bash
+VERSION=1.0.0 scripts/package_dmg.sh
+```
+
+This writes `build/TaskBoard-1.0.0.dmg`.
 
 For development you can also run it directly:
 
 ```bash
 swift run
 ```
-
-> The app is ad-hoc signed, not notarized. On another Mac, the first launch may need right-click → **Open**.
 
 ## Data storage
 
@@ -72,5 +95,6 @@ Sources/TaskBoard/
 ├── ArchiveView.swift     # Archived cards browser
 └── ImageCache.swift      # Downsampled thumbnail cache
 scripts/make_icon.swift   # Draws the app icon
+scripts/package_dmg.sh    # Builds and packages a release DMG
 build.sh                  # Builds and packages the .app bundle
 ```
