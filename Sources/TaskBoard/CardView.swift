@@ -12,16 +12,17 @@ struct CardView: View, Equatable {
     let boardLabels: [CardLabel]
     let columns: [BoardColumn]
     var isSelected = false
+    /// 正在被拖动：在预览位置显示为半透明占位
+    var isDragPlaceholder = false
     var onOpen: () -> Void
     var onHover: (Bool) -> Void = { _ in }
+    var onBeginDrag: () -> Void = {}
 
     static func == (a: CardView, b: CardView) -> Bool {
         a.boardID == b.boardID && a.card == b.card && a.labels == b.labels && a.isSelected == b.isSelected
-            && a.boardLabels == b.boardLabels && a.columns == b.columns
+            && a.isDragPlaceholder == b.isDragPlaceholder && a.boardLabels == b.boardLabels && a.columns == b.columns
     }
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dropTargeted = false
     @State private var hovering = false
     @State private var confirmDelete = false
 
@@ -36,40 +37,29 @@ struct CardView: View, Equatable {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 拖动卡片经过时，在上方让出一个空位，提示放下后的位置
-            if dropTargeted {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.accentColor.opacity(0.12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(Color.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                    )
-                    .frame(height: 40)
-                    .padding(.bottom, 8)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
+        cardBody
+            .opacity(isDragPlaceholder ? 0.35 : 1)
+            .overlay {
+                if isDragPlaceholder {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                }
             }
-            cardBody
-        }
-        .animation(Motion.gap(reduceMotion), value: dropTargeted)
         .contentShape(Rectangle())
         .onHover { inside in
             hovering = inside
             onHover(inside)
         }
         .onTapGesture(perform: onOpen)
-        .draggable(CardDragItem(id: card.id)) {
-            Text(card.title)
-                .padding(10)
-                .frame(width: 240, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(background))
-                .foregroundStyle(foreground)
+        // 卡片的放置由看板统一处理（见 CardReorder），这里只负责开始拖动
+        .onDrag {
+            onBeginDrag()
+            let provider = NSItemProvider()
+            provider.register(CardDragItem(id: card.id))
+            return provider
+        } preview: {
+            CardDragPreview(card: card)
         }
-        .dropDestination(for: CardDragItem.self) { items, _ in
-            guard let item = items.first, let columnID = card.columnID else { return false }
-            store.moveCard(item.id, in: boardID, to: columnID, before: card.id)
-            return true
-        } isTargeted: { dropTargeted = $0 }
         .contextMenu { contextMenu }
         .confirmationDialog("确定删除卡片「\(card.title)」吗？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { store.deleteCard(card.id, in: boardID) }

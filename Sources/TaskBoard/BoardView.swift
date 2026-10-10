@@ -22,6 +22,7 @@ struct BoardView: View {
     @State private var previewURLs: [URL] = []
     @State private var keyMonitor = KeyMonitor()
     @State private var columnReorder = ColumnReorder()
+    @State private var cardReorder = CardReorder()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -44,7 +45,7 @@ struct BoardView: View {
                         HStack(alignment: .top, spacing: 12) {
                             let columns = displayedColumns(board)
                             ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
-                                let cards = visibleCards(board, in: column.id)
+                                let cards = arrangedCards(board, in: column.id)
                                 let isDragged = columnReorder.draggingID == column.id
                                 ColumnView(
                                     boardID: boardID,
@@ -55,10 +56,15 @@ struct BoardView: View {
                                     boardLabels: board.labels,
                                     columns: board.columns,
                                     selectedCardID: selectedCardID,
+                                    draggingCardID: cardReorder.draggingID,
+                                    isCardDropTarget: cardReorder.target?.columnID == column.id,
                                     addRequest: $addRequest,
                                     onOpen: { editingCard = CardRef(id: $0.id) },
-                                    onHoverCard: { id, inside in if inside { selectedCardID = id } }
+                                    onHoverCard: { id, inside in if inside { selectedCardID = id } },
+                                    onBeginCardDrag: { beginCardDrag($0) },
+                                    onCardFrame: { id, frame in cardReorder.frames[id] = frame }
                                 )
+                                .transition(Motion.cardTransition(reduceMotion))
                                 // 被拖动的列表留在预览位置，显示为半透明占位
                                 .opacity(isDragged ? 0.35 : 1)
                                 .overlay {
@@ -84,6 +90,25 @@ struct BoardView: View {
                         .animation(Motion.move(reduceMotion), value: board.columns.map(\.id))
                         .padding(16)
                         .frame(maxHeight: .infinity, alignment: .top)
+                        .coordinateSpace(name: BoardSpace.name)
+                        .overlay {
+                            // 拖动卡片期间同理：由一个放置区域统一计算目标列表和位置
+                            if cardReorder.isDragging {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onDrop(of: [.taskBoardCard], delegate: CardReorderDropDelegate(
+                                        reorder: cardReorder,
+                                        columnIDs: displayedColumns(board).map(\.id),
+                                        cardIDs: { columnID in
+                                            guard let board = store.board(boardID) else { return [] }
+                                            return arrangedCards(board, in: columnID).map(\.id)
+                                        },
+                                        slotWidth: 272 + 12,
+                                        leadingInset: 16,
+                                        onCommit: commitCardDrop
+                                    ))
+                            }
+                        }
                         .overlay {
                             // 拖动列表期间，用一个覆盖整个看板的放置区域接管，避免被卡片的放置区域拦截
                             if columnReorder.isDragging {
@@ -252,6 +277,34 @@ struct BoardView: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(Capsule().fill(Color.secondary.opacity(0.15)))
+    }
+
+    // MARK: - 卡片拖动
+
+    private func beginCardDrag(_ card: Card) {
+        guard let board = store.board(boardID), let columnID = card.columnID else { return }
+        let index = visibleCards(board, in: columnID).firstIndex(where: { $0.id == card.id }) ?? 0
+        cardReorder.animation = Motion.move(reduceMotion)
+        cardReorder.begin(card.id, at: CardDropTarget(columnID: columnID, index: index))
+    }
+
+    private func commitCardDrop(_ cardID: UUID, _ target: CardDropTarget) {
+        guard let board = store.board(boardID) else { return }
+        let others = visibleCards(board, in: target.columnID).filter { $0.id != cardID }
+        let before = target.index < others.count ? others[target.index].id : nil
+        store.moveCard(cardID, in: boardID, to: target.columnID, before: before)
+    }
+
+    /// 拖动卡片时按预览位置排列：被拖动的卡片从原列表移出，放到目标列表的预览位置
+    private func arrangedCards(_ board: Board, in columnID: UUID) -> [Card] {
+        var cards = visibleCards(board, in: columnID)
+        guard let id = cardReorder.draggingID, let target = cardReorder.target,
+              let dragged = board.cards.first(where: { $0.id == id }) else { return cards }
+        cards.removeAll { $0.id == id }
+        if target.columnID == columnID {
+            cards.insert(dragged, at: min(target.index, cards.count))
+        }
+        return cards
     }
 
     /// 拖动列表时按预览顺序显示

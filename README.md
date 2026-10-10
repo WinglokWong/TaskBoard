@@ -14,7 +14,7 @@ The interface is available in **English**, **Simplified Chinese** (任务看板)
 - **Cards**:
   - Each card has a title, a description and attachments.
   - Mark a card done with one click; it gets a check and a strikethrough.
-  - Drag cards between lists, or onto another card to reorder.
+  - Drag cards to reorder them or move them between lists. The card moves into place as you drag, the other cards make room, and releasing leaves it exactly where the preview showed. Dropping outside the board or pressing Esc cancels.
   - Right-click a card for quick actions: color, move, archive, delete.
 - **Attachments**:
   - Add files with the file picker, drag and drop, or paste an image from the clipboard.
@@ -61,8 +61,8 @@ The interface is available in **English**, **Simplified Chinese** (任务看板)
 - **Undo / Redo**: ⌘Z and ⇧⌘Z work for every board action, including deleting cards, lists and boards. All edits made in one card-editor session undo as a single step.
 - **Search**: find cards by title, description or checklist items from the toolbar.
 - **Smooth motion**:
-  - Cards and lists animate when they move, appear or disappear.
-  - Drop targets open up space while you drag.
+  - Cards and lists animate when they move, appear or disappear, and switching boards cross-fades.
+  - While dragging, the other cards or lists slide aside to preview the result.
   - With **Reduce Motion** turned on, movement is replaced by simple fades.
 - **Three languages**:
   - English, Simplified Chinese and Traditional Chinese, including dates, reminders and the app name.

@@ -14,15 +14,14 @@ final class ColumnReorder {
     private(set) var previewOrder: [UUID]?
 
     @ObservationIgnored var animation: Animation? = Motion.move
-    @ObservationIgnored private var mouseWatcher: Timer?
-    @ObservationIgnored private var releasedTicks = 0
+    @ObservationIgnored private let watcher = DragReleaseWatcher()
 
     var isDragging: Bool { draggingID != nil }
 
     func begin(_ id: UUID, order: [UUID]) {
         draggingID = id
         previewOrder = order
-        watchMouseRelease()
+        watcher.start { [weak self] in self?.cancel() }
     }
 
     /// 鼠标经过第 `slot` 个列表的位置
@@ -53,29 +52,11 @@ final class ColumnReorder {
     }
 
     private func finish(animated: Bool) {
-        mouseWatcher?.invalidate()
-        mouseWatcher = nil
+        watcher.stop()
         withAnimation(animated ? animation : nil) {
             draggingID = nil
             previewOrder = nil
         }
-    }
-
-    /// SwiftUI 不会通知“拖动在别处结束”，所以观察鼠标按键：松开一段时间后仍未放下，就视为取消
-    private func watchMouseRelease() {
-        mouseWatcher?.invalidate()
-        releasedTicks = 0
-        let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            if NSEvent.pressedMouseButtons & 1 == 0 {
-                self.releasedTicks += 1
-                if self.releasedTicks >= 3 { self.cancel() }
-            } else {
-                self.releasedTicks = 0
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        mouseWatcher = timer
     }
 }
 

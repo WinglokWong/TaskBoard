@@ -11,10 +11,17 @@ struct ColumnView: View {
     let boardLabels: [CardLabel]
     let columns: [BoardColumn]
     var selectedCardID: UUID? = nil
+    /// 正在拖动的卡片（在本列表中显示为占位）
+    var draggingCardID: UUID? = nil
+    /// 拖动中的卡片将放入本列表
+    var isCardDropTarget = false
     /// 键盘快捷键 N 请求在这一列添加卡片
     @Binding var addRequest: UUID?
     var onOpen: (Card) -> Void
     var onHoverCard: (UUID, Bool) -> Void = { _, _ in }
+    var onBeginCardDrag: (Card) -> Void = { _ in }
+    /// 上报卡片在看板坐标空间中的位置，用于计算拖放位置
+    var onCardFrame: (UUID, CGRect) -> Void = { _, _ in }
 
     @State private var isRenaming = false
     @State private var nameDraft = ""
@@ -27,7 +34,6 @@ struct ColumnView: View {
     @State private var showColor = false
     @State private var confirmDelete = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var cardDropTargeted = false
     @State private var headerHovering = false
     @State private var contentHeight: CGFloat = 0
 
@@ -48,9 +54,17 @@ struct ColumnView: View {
                                  labels: boardLabels.filter { card.labelIDs.contains($0.id) },
                                  boardLabels: boardLabels, columns: columns,
                                  isSelected: card.id == selectedCardID,
+                                 isDragPlaceholder: card.id == draggingCardID,
                                  onOpen: { onOpen(card) },
-                                 onHover: { onHoverCard(card.id, $0) })
+                                 onHover: { onHoverCard(card.id, $0) },
+                                 onBeginDrag: { onBeginCardDrag(card) })
                         .equatable()
+                        .background(GeometryReader { g in
+                            let frame = g.frame(in: .named(BoardSpace.name))
+                            Color.clear
+                                .onAppear { onCardFrame(card.id, frame) }
+                                .onChange(of: frame) { _, newFrame in onCardFrame(card.id, newFrame) }
+                        })
                         .id(card.id)
                         .transition(Motion.cardTransition(reduceMotion))
                     }
@@ -74,16 +88,11 @@ struct ColumnView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(background))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.accentColor, lineWidth: cardDropTargeted ? 2 : 0)
+                .strokeBorder(Color.accentColor.opacity(0.8), lineWidth: isCardDropTarget ? 2 : 0)
         )
-        .shadow(color: .black.opacity(cardDropTargeted ? 0.2 : 0.12), radius: cardDropTargeted ? 6 : 2, y: 1)
-        .animation(Motion.gap(reduceMotion), value: cardDropTargeted)
-        // 卡片放到列表空白处：移到列表末尾。（列表的拖动排序由 BoardView 统一处理）
-        .dropDestination(for: CardDragItem.self) { items, _ in
-            guard let item = items.first else { return false }
-            store.moveCard(item.id, in: boardID, to: column.id, before: nil)
-            return true
-        } isTargeted: { cardDropTargeted = $0 }
+        .shadow(color: .black.opacity(isCardDropTarget ? 0.2 : 0.12), radius: isCardDropTarget ? 6 : 2, y: 1)
+        .animation(Motion.quick, value: isCardDropTarget)
+        // 卡片和列表的拖放都由 BoardView 统一处理
         .onChange(of: addRequest) { _, request in
             guard request == column.id else { return }
             addRequest = nil

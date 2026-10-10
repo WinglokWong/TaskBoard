@@ -138,14 +138,20 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
-            if store.showingUpcoming {
-                UpcomingView()
-            } else if let id = store.data.selectedBoardID, store.board(id) != nil {
-                BoardView(boardID: id).id(id)
-            } else {
-                ContentUnavailableView("没有选中的看板", systemImage: "rectangle.split.3x1",
-                                       description: Text("在左侧选择或新建一个看板"))
+            ZStack {
+                if store.showingUpcoming {
+                    UpcomingView()
+                        .transition(.opacity)
+                } else if let id = store.data.selectedBoardID, store.board(id) != nil {
+                    BoardView(boardID: id).id(id)
+                        .transition(.opacity)
+                } else {
+                    ContentUnavailableView("没有选中的看板", systemImage: "rectangle.split.3x1",
+                                           description: Text("在左侧选择或新建一个看板"))
+                }
             }
+            // 切换看板时淡入淡出
+            .animation(.easeInOut(duration: 0.18), value: detailKey)
         }
         .onAppear {
             store.undoManager = undoManager
@@ -191,6 +197,10 @@ struct ContentView: View {
         } message: {
             Text("看板中的所有卡片和附件（包括归档）都会被永久删除。")
         }
+    }
+
+    private var detailKey: String {
+        store.showingUpcoming ? "upcoming" : (store.data.selectedBoardID?.uuidString ?? "none")
     }
 
     private var sidebarSelection: Binding<SidebarItem?> {
