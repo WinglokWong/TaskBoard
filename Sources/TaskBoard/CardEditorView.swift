@@ -8,6 +8,11 @@ struct CardEditorView: View {
     let boardID: UUID
 
     @State private var draft: Card
+    /// 打开编辑窗口时的卡片，用于关闭时合并为一个撤销步骤
+    private let original: Card
+    @State private var newChecklistItem = ""
+    @FocusState private var checklistFieldFocused: Bool
+    @State private var notificationsDenied = false
     @State private var confirmDelete = false
     @State private var importing = false
     @State private var dropTargeted = false
@@ -15,6 +20,7 @@ struct CardEditorView: View {
     init(boardID: UUID, card: Card) {
         self.boardID = boardID
         _draft = State(initialValue: card)
+        original = card
     }
 
     private var columns: [BoardColumn] { store.board(boardID)?.columns ?? [] }
@@ -30,6 +36,7 @@ struct CardEditorView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     titleSection
                     statusSection
+                    dueDateSection
                     section("描述", systemImage: "text.alignleft") {
                         TextEditor(text: $draft.details)
                             .font(.body)
@@ -39,6 +46,7 @@ struct CardEditorView: View {
                             .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
                             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.12)))
                     }
+                    checklistSection
                     section("卡片颜色", systemImage: "paintpalette") {
                         ColorSwatchPicker(selection: $draft.color)
                     }
@@ -53,6 +61,10 @@ struct CardEditorView: View {
         .frame(minWidth: 560, idealWidth: 600, minHeight: 600, idealHeight: 720)
         .onChange(of: draft) { _, newValue in
             store.saveCard(newValue, in: boardID)
+        }
+        .onAppear(perform: refreshNotificationStatus)
+        .onDisappear {
+            store.registerCardEdit(original: original, in: boardID)
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { addFiles(urls) }
@@ -112,6 +124,100 @@ struct CardEditorView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var dueDateSection: some View {
+        section("截止日期", systemImage: "calendar") {
+            if let due = draft.dueDate {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 12) {
+                        DatePicker("", selection: Binding(get: { due }, set: { draft.dueDate = $0 }),
+                                   displayedComponents: [.date, .hourAndMinute])
+                            .labelsHidden()
+                            .fixedSize()
+                        Picker("提醒", selection: $draft.reminderMinutes) {
+                            ForEach(ReminderOption.all) { option in
+                                Text(option.title).tag(option.minutes)
+                            }
+                        }
+                        .fixedSize()
+                        .onChange(of: draft.reminderMinutes) { _, minutes in
+                            if minutes != nil { NotificationManager.shared.requestAuthorization() }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: refreshNotificationStatus)
+                        }
+                        DueBadge(date: due, isDone: draft.isDone, reminder: draft.reminderMinutes != nil)
+                            .font(.caption)
+                        Spacer()
+                        Button("移除") {
+                            draft.dueDate = nil
+                            draft.reminderMinutes = nil
+                        }
+                    }
+                    if notificationsDenied && draft.reminderMinutes != nil {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bell.slash")
+                            Text("通知权限已关闭，到期时不会收到提醒。")
+                            Button("打开系统设置") { NotificationManager.shared.openSystemSettings() }
+                                .buttonStyle(.link)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    }
+                }
+            } else {
+                Button {
+                    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+                    draft.dueDate = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)
+                    draft.reminderMinutes = 0
+                    NotificationManager.shared.requestAuthorization()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: refreshNotificationStatus)
+                } label: {
+                    Label("添加截止日期", systemImage: "plus")
+                }
+            }
+        }
+    }
+
+    private var checklistSection: some View {
+        section("清单", systemImage: "checklist") {
+            VStack(alignment: .leading, spacing: 6) {
+                if !draft.checklist.isEmpty {
+                    let done = draft.checklistDoneCount, total = draft.checklist.count
+                    HStack(spacing: 8) {
+                        ProgressView(value: Double(done), total: Double(total))
+                            .tint(done == total ? .green : .accentColor)
+                        Text("\(done)/\(total)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach($draft.checklist) { $item in
+                        ChecklistRow(item: $item) {
+                            draft.checklist.removeAll { $0.id == item.id }
+                        }
+                    }
+                }
+                HStack {
+                    TextField("添加清单项，回车确认", text: $newChecklistItem)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($checklistFieldFocused)
+                        .onSubmit(addChecklistItem)
+                    Button("添加", action: addChecklistItem)
+                        .disabled(newChecklistItem.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func addChecklistItem() {
+        let text = newChecklistItem.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        draft.checklist.append(ChecklistItem(text: text))
+        newChecklistItem = ""
+        checklistFieldFocused = true
+    }
+
+    private func refreshNotificationStatus() {
+        NotificationManager.shared.checkDenied { notificationsDenied = $0 }
     }
 
     private var attachmentsSection: some View {
@@ -228,13 +334,40 @@ struct CardEditorView: View {
 
     private func removeAttachment(_ attachment: Attachment) {
         draft.attachments.removeAll { $0.id == attachment.id }
-        store.removeFile(attachment)
     }
 
     private func makeCover(_ attachment: Attachment) {
         guard let i = draft.attachments.firstIndex(where: { $0.id == attachment.id }) else { return }
         let item = draft.attachments.remove(at: i)
         draft.attachments.insert(item, at: 0)
+    }
+}
+
+struct ChecklistRow: View {
+    @Binding var item: ChecklistItem
+    var onDelete: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Toggle("", isOn: $item.isDone)
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+            TextField("清单项", text: $item.text)
+                .textFieldStyle(.plain)
+                .strikethrough(item.isDone)
+                .foregroundStyle(item.isDone ? .secondary : .primary)
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .opacity(hovering ? 1 : 0)
+            .help("删除清单项")
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color.secondary.opacity(0.08) : .clear))
+        .onHover { hovering = $0 }
     }
 }
 

@@ -74,6 +74,8 @@ struct BoardView: View {
                 .help("查看已归档的卡片")
             }
         }
+        .onAppear(perform: handleOpenRequest)
+        .onChange(of: store.openRequest) { _, _ in handleOpenRequest() }
         .sheet(item: $editingCard) { ref in
             if let card = store.card(ref.id, in: boardID) {
                 CardEditorView(boardID: boardID, card: card)
@@ -89,13 +91,19 @@ struct BoardView: View {
         }
     }
 
+    private func handleOpenRequest() {
+        guard let request = store.openRequest, request.boardID == boardID else { return }
+        store.openRequest = nil
+        showArchive = false
+        editingCard = CardRef(id: request.cardID)
+    }
+
     private func visibleCards(_ board: Board, in columnID: UUID) -> [Card] {
         let query = search.trimmingCharacters(in: .whitespaces)
         return board.cards.filter { card in
             guard card.columnID == columnID, !card.isArchived else { return false }
             guard !query.isEmpty else { return true }
-            return card.title.localizedCaseInsensitiveContains(query)
-                || card.details.localizedCaseInsensitiveContains(query)
+            return card.matches(query)
         }
     }
 }

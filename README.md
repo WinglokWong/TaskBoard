@@ -22,8 +22,17 @@ The app's interface is in Chinese (app name: 任务看板).
   - Archive single cards, or all done cards in a list at once.
   - Browse, search, restore or permanently delete archived cards.
   - Deleting a list moves its cards to the archive instead of losing them.
-- **Search**: filter cards by title or description from the toolbar.
-- **Auto-save**: changes are written to disk automatically.
+- **Due dates & reminders**:
+  - Give a card a due date and time.
+  - The card badge turns orange when it's due within 24 hours, red when overdue, and green once done.
+  - Optionally get a macOS notification at the due time, or 15 minutes, 1 hour or 1 day before. Clicking the notification opens the card.
+- **Checklists**: add sub-tasks inside a card. The card shows progress such as `3/5`, which turns green when everything is checked.
+- **Undo / Redo**: ⌘Z and ⇧⌘Z work for every board action, including deleting cards, lists and boards. All edits made in one card-editor session undo as a single step.
+- **Search**: filter cards by title, description or checklist items from the toolbar.
+- **Auto-save & backups**:
+  - Changes are written to disk automatically.
+  - A backup is taken once a day, and the last 30 are kept.
+  - Use **File → Back Up Now** (立即备份) or **File → Restore from Backup…** (从备份恢复…) to manage them.
 
 ## Download & install
 
@@ -77,8 +86,11 @@ All data lives in `~/Library/Application Support/TaskBoard/`:
 | --- | --- |
 | `data.json` | Boards, lists and cards (human-readable JSON) |
 | `Attachments/` | Copies of attached files |
+| `Backups/` | Daily and manual backups of `data.json` |
 
-If `data.json` ever fails to load, it is backed up as `data.corrupt-<timestamp>.json` before a fresh board is created, so nothing is silently overwritten. Use **File → Show Data Folder in Finder** (在 Finder 中显示数据文件夹) to jump there.
+Loading is tolerant: missing or unknown fields fall back to defaults, so data saved by older versions keeps working. If `data.json` truly can't be read, the app keeps a copy in `Backups/` (marked as unreadable), starts a fresh board, and tells you where the copy is.
+
+Attachment files are not deleted right away when you remove a card or attachment, so undo and restore can still find them. Files no longer referenced by your data or by any backup are cleaned up on the next launch. Use **File → Show Data Folder in Finder** (在 Finder 中显示数据文件夹) to jump there.
 
 ## Project structure
 
@@ -93,6 +105,8 @@ Sources/TaskBoard/
 ├── CardView.swift        # Card tile, drag & drop, context menu
 ├── CardEditorView.swift  # Card detail sheet and attachments
 ├── ArchiveView.swift     # Archived cards browser
+├── BackupsView.swift     # Backup list and restore
+├── Notifications.swift   # Due-date reminders (UserNotifications)
 └── ImageCache.swift      # Downsampled thumbnail cache
 scripts/make_icon.swift   # Draws the app icon
 scripts/package_dmg.sh    # Builds and packages a release DMG

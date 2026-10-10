@@ -16,7 +16,7 @@ struct ArchiveView: View {
         let query = search.trimmingCharacters(in: .whitespaces)
         return (board?.cards ?? [])
             .filter(\.isArchived)
-            .filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.details.localizedCaseInsensitiveContains(query) }
+            .filter { query.isEmpty || $0.matches(query) }
             .sorted { ($0.archivedAt ?? .distantPast) > ($1.archivedAt ?? .distantPast) }
     }
 

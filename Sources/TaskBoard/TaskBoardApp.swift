@@ -3,6 +3,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationManager.shared.setUp()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -33,6 +34,9 @@ struct TaskBoardApp: App {
                 Button("在 Finder 中显示数据文件夹") {
                     NSWorkspace.shared.activateFileViewerSelecting([Store.dataURL])
                 }
+                Divider()
+                Button("立即备份") { store.backupNow() }
+                Button("从备份恢复…") { store.showBackups = true }
             }
         }
     }
@@ -40,6 +44,7 @@ struct TaskBoardApp: App {
 
 struct ContentView: View {
     @EnvironmentObject private var store: Store
+    @Environment(\.undoManager) private var undoManager
     @State private var renamingBoardID: UUID?
     @State private var renameText = ""
     @State private var deletingBoardID: UUID?
@@ -84,6 +89,24 @@ struct ContentView: View {
                 ContentUnavailableView("没有选中的看板", systemImage: "rectangle.split.3x1",
                                        description: Text("在左侧选择或新建一个看板"))
             }
+        }
+        .onAppear {
+            store.undoManager = undoManager
+            NotificationManager.shared.onOpenCard = { [weak store] boardID, cardID in
+                store?.requestOpen(cardID: cardID, in: boardID)
+            }
+        }
+        .onChange(of: undoManager) { _, manager in store.undoManager = manager }
+        .sheet(isPresented: $store.showBackups) {
+            BackupsView().environmentObject(store)
+        }
+        .alert("数据读取失败", isPresented: Binding(
+            get: { store.startupMessage != nil },
+            set: { if !$0 { store.startupMessage = nil } }
+        )) {
+            Button("好") {}
+        } message: {
+            Text(store.startupMessage ?? "")
         }
         .alert("重命名看板", isPresented: Binding(
             get: { renamingBoardID != nil },

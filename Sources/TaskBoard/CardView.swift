@@ -12,6 +12,10 @@ struct CardView: View {
 
     private var foreground: Color { card.color?.foreground ?? .primary }
 
+    private var hasBadges: Bool {
+        card.dueDate != nil || !card.checklist.isEmpty || !card.details.isEmpty || !card.attachments.isEmpty
+    }
+
     private var background: Color {
         card.color?.color ?? Color(nsColor: .controlBackgroundColor)
     }
@@ -44,8 +48,20 @@ struct CardView: View {
                     .multilineTextAlignment(.leading)
             }
 
-            if !card.details.isEmpty || !card.attachments.isEmpty {
+            if hasBadges {
                 HStack(spacing: 10) {
+                    if let due = card.dueDate {
+                        DueBadge(date: due, isDone: card.isDone, reminder: card.reminderMinutes != nil, foreground: foreground)
+                    }
+                    if !card.checklist.isEmpty {
+                        let done = card.checklistDoneCount, total = card.checklist.count
+                        Label("\(done)/\(total)", systemImage: "checklist")
+                            .padding(.horizontal, done == total ? 5 : 0)
+                            .padding(.vertical, done == total ? 1 : 0)
+                            .background(Capsule().fill(done == total ? Color.green : Color.clear))
+                            .foregroundStyle(done == total ? Color.white : foreground.opacity(0.6))
+                            .help("清单进度")
+                    }
                     if !card.details.isEmpty {
                         Image(systemName: "text.alignleft").help("有描述")
                     }
@@ -115,5 +131,32 @@ struct CardView: View {
         Divider()
         Button("归档") { store.archiveCard(card.id, in: boardID) }
         Button("删除…", role: .destructive) { confirmDelete = true }
+    }
+}
+
+/// 截止日期徽章：已完成为绿色，已过期为红色，24 小时内到期为橙色
+struct DueBadge: View {
+    let date: Date
+    let isDone: Bool
+    var reminder = false
+    var foreground: Color = .primary
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let style = style(now: context.date)
+            Label(DueFormat.short(date, now: context.date), systemImage: reminder ? "bell" : "clock")
+                .padding(.horizontal, style.filled ? 5 : 0)
+                .padding(.vertical, style.filled ? 1 : 0)
+                .background(Capsule().fill(style.fill))
+                .foregroundStyle(style.filled ? Color.white : foreground.opacity(0.6))
+                .help(style.help)
+        }
+    }
+
+    private func style(now: Date) -> (fill: Color, filled: Bool, help: String) {
+        if isDone { return (.green, true, "已完成") }
+        if date < now { return (.red, true, "已过期") }
+        if date.timeIntervalSince(now) < 24 * 3600 { return (.orange, true, "即将到期") }
+        return (.clear, false, "截止日期")
     }
 }
