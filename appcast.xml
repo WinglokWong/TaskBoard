@@ -6,6 +6,53 @@
     <description>TaskBoard updates</description>
     <language>zh-cn</language>
     <item>
+      <title>Version 1.4.0</title>
+      <pubDate>Sat, 10 Oct 2026 07:02:01 GMT</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/WinglokWong/TaskBoard/releases/tag/v1.4.0</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h2 dir="auto">What's new</h2>
+<ul dir="auto">
+<li><strong>English and Traditional Chinese</strong>:
+<ul dir="auto">
+<li>TaskBoard now speaks English, Simplified Chinese (任务看板) and Traditional Chinese (任務看板). That covers menus, dialogs, dates, reminders and the app name.</li>
+<li>It follows your system language by default.</li>
+<li>To switch, use <strong>Settings → General</strong>, then relaunch from there.</li>
+</ul>
+</li>
+<li><strong>Settings window</strong> (⌘,): language, default time and reminder for new due dates, how many backups to keep, data location, import/export, and update preferences.</li>
+<li><strong>Import &amp; export</strong>:
+<ul dir="auto">
+<li><strong>Export a board</strong> to a <code class="notranslate">.taskboard</code> file with its lists, cards, labels and attachments. Find it in the board's gear menu, by right-clicking the sidebar, or with ⇧⌘E. Importing it adds a new board and never changes existing ones.</li>
+<li><strong>Export all data</strong> to move everything to another Mac. On import, choose <strong>Add as New Boards</strong> or <strong>Replace All Data</strong>. Replacing backs up your current data first and can be undone with ⌘Z.</li>
+<li>Import with <strong>File → Import…</strong> (⇧⌘I), or double-click a <code class="notranslate">.taskboard</code> file.</li>
+</ul>
+</li>
+<li><strong>Smoother list reordering</strong>: drag a whole list and the others slide aside to preview the new order. Release to place it; drop outside the board or press Esc to cancel.</li>
+</ul>
+<h2 dir="auto">Notes</h2>
+<ul dir="auto">
+<li>The app file is now named <strong>TaskBoard.app</strong>. Finder shows it as 任务看板 or 任務看板 on Chinese systems. If you update from inside the app, your existing copy keeps its current file name.</li>
+<li>Your boards keep their names. Only new boards and the welcome board use the selected language.</li>
+</ul>
+<h2 dir="auto">Install</h2>
+<ul dir="auto">
+<li><strong>Already on 1.3.0:</strong> use <strong>任务看板 → 检查更新…</strong>, or wait for the automatic check.</li>
+<li><strong>New install, or 1.2.0 and earlier:</strong>
+<ol dir="auto">
+<li>Download <strong>TaskBoard-1.4.0.dmg</strong> below, open it, and drag <strong>TaskBoard</strong> into <strong>Applications</strong>.</li>
+<li>The first launch is blocked because the app isn't notarized by Apple. Go to <strong>System Settings → Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>, or run this in Terminal:
+<pre class="notranslate"><code class="notranslate">xattr -dr com.apple.quarantine "/Applications/TaskBoard.app"
+</code></pre>
+</li>
+</ol>
+</li>
+</ul>
+<p dir="auto"><strong>Requirements:</strong> macOS 14 Sonoma or later. The DMG is a universal build for Apple Silicon and Intel Macs.</p>]]></description>
+      <enclosure url="https://github.com/WinglokWong/TaskBoard/releases/download/v1.4.0/TaskBoard-1.4.0.dmg" sparkle:edSignature="Mds2sZcCSEBBGJ/ADNXzs7IFbXPWypOfHkiV3pfQeetl5Rjp7ls85YBuRdlpKvJoBSn4fPdT44QQxJwADNL7BQ==" length="3511217" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.3.0</title>
       <pubDate>Sat, 10 Oct 2026 04:48:54 GMT</pubDate>
       <sparkle:version>5</sparkle:version>
