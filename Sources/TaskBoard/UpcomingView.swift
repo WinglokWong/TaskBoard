@@ -14,7 +14,7 @@ private struct UpcomingItem: Identifiable {
 
 /// 汇总所有看板中有截止日期的卡片
 struct UpcomingView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     @State private var editing: UpcomingRef?
     @State private var showDone = false
 
@@ -66,7 +66,7 @@ struct UpcomingView: View {
         .sheet(item: $editing) { ref in
             if let card = store.card(ref.cardID, in: ref.boardID) {
                 CardEditorView(boardID: ref.boardID, card: card)
-                    .environmentObject(store)
+                    .environment(store)
             }
         }
     }

@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import QuickLook
 
 struct CardEditorView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     let boardID: UUID
 
@@ -18,11 +18,14 @@ struct CardEditorView: View {
     @State private var importing = false
     @State private var dropTargeted = false
     @State private var showLabelPicker = false
+    @State private var editingDescription: Bool
+    @FocusState private var descriptionFocused: Bool
     @State private var previewURL: URL?
 
     init(boardID: UUID, card: Card) {
         self.boardID = boardID
         _draft = State(initialValue: card)
+        _editingDescription = State(initialValue: card.details.isEmpty)
         original = card
     }
 
@@ -41,15 +44,7 @@ struct CardEditorView: View {
                     statusSection
                     labelsSection
                     dueDateSection
-                    section("描述", systemImage: "text.alignleft") {
-                        TextEditor(text: $draft.details)
-                            .font(.body)
-                            .scrollContentBackground(.hidden)
-                            .padding(6)
-                            .frame(minHeight: 140)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.12)))
-                    }
+                    descriptionSection
                     checklistSection
                     section("卡片颜色", systemImage: "paintpalette") {
                         ColorSwatchPicker(selection: $draft.color)
@@ -106,6 +101,51 @@ struct CardEditorView: View {
         }
     }
 
+    private var descriptionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("描述", systemImage: "text.alignleft")
+                    .font(.headline)
+                Spacer()
+                if editingDescription {
+                    Text("支持 Markdown")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("# 标题、- 列表、- [ ] 任务、**粗体**、*斜体*、`代码`、[链接](https://…)、> 引用、``` 代码块")
+                    if !draft.details.isEmpty {
+                        Button("完成") { withAnimation(.easeInOut(duration: 0.2)) { editingDescription = false } }
+                            .controlSize(.small)
+                    }
+                } else {
+                    Button("编辑") { beginEditingDescription() }
+                        .controlSize(.small)
+                }
+            }
+            if editingDescription {
+                TextEditor(text: $draft.details)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .focused($descriptionFocused)
+                    .padding(6)
+                    .frame(minHeight: 140)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.12)))
+            } else {
+                MarkdownView(text: draft.details)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2, perform: beginEditingDescription)
+                    .help("双击编辑")
+            }
+        }
+    }
+
+    private func beginEditingDescription() {
+        withAnimation(.easeInOut(duration: 0.2)) { editingDescription = true }
+        DispatchQueue.main.async { descriptionFocused = true }
+    }
+
     private var labelsSection: some View {
         section("标签", systemImage: "tag") {
             let labels = store.board(boardID)?.labels.filter { draft.labelIDs.contains($0.id) } ?? []
@@ -122,7 +162,7 @@ struct CardEditorView: View {
                 }
                 .popover(isPresented: $showLabelPicker, arrowEdge: .bottom) {
                     LabelPickerView(boardID: boardID, selection: $draft.labelIDs)
-                        .environmentObject(store)
+                        .environment(store)
                 }
                 Spacer(minLength: 0)
             }
@@ -413,9 +453,8 @@ struct AttachmentTile: View {
         VStack(spacing: 4) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.12))
-                if attachment.isImage, let image = ImageCache.shared.thumbnail(for: attachment) {
-                    Color.clear
-                        .overlay(Image(nsImage: image).resizable().scaledToFill())
+                if attachment.isImage {
+                    AttachmentThumbnail(attachment: attachment)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: attachment.url.path))

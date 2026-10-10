@@ -14,24 +14,25 @@ struct BackupInfo: Identifiable, Hashable {
     var id: URL { url }
 }
 
-final class Store: ObservableObject {
-    @Published var data: AppData {
+@Observable
+final class Store {
+    var data: AppData {
         didSet { scheduleSave() }
     }
 
     /// 启动时需要告知用户的问题（例如数据文件无法读取）
-    @Published var startupMessage: String?
-    @Published var showBackups = false
-    @Published var showShortcuts = false
+    var startupMessage: String?
+    var showBackups = false
+    var showShortcuts = false
     /// 侧边栏是否选中了“即将到期”（不保存到文件）
-    @Published var showingUpcoming = false
-    @Published var openRequest: CardOpenRequest?
+    var showingUpcoming = false
+    var openRequest: CardOpenRequest?
 
     /// 由主窗口注入，用于撤销 / 重做
-    weak var undoManager: UndoManager?
+    @ObservationIgnored weak var undoManager: UndoManager?
 
-    private var saveWork: DispatchWorkItem?
-    private var lastCheckpoint: (name: String, date: Date)?
+    @ObservationIgnored private var saveWork: DispatchWorkItem?
+    @ObservationIgnored private var lastCheckpoint: (name: String, date: Date)?
 
     static let rootURL: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -76,7 +77,12 @@ final class Store: ObservableObject {
         if data.selectedBoardID == nil { data.selectedBoardID = data.boards.first?.id }
 
         cleanUpOrphanedAttachments()
+        runAutoArchive()
         NotificationManager.shared.reschedule(for: data)
+        // 应用长时间开着时，定期检查一次自动归档
+        Timer.scheduledTimer(withTimeInterval: 30 * 60, repeats: true) { [weak self] _ in
+            self?.runAutoArchive()
+        }
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
@@ -284,6 +290,22 @@ final class Store: ObservableObject {
         openRequest = CardOpenRequest(boardID: boardID, cardID: cardID)
     }
 
+    // MARK: - 自动归档
+
+    /// 归档开启了自动归档的看板中，完成时间超过设定天数的卡片。
+    /// 没有完成时间的已完成卡片（升级前完成的）从现在开始计时。
+    func runAutoArchive(now: Date = Date()) {
+        var updated = data
+        if updated.applyAutoArchive(now: now) { data = updated }
+    }
+
+    func setAutoArchive(_ boardID: UUID, days: Int?) {
+        guard board(boardID)?.autoArchiveDays != days else { return }
+        checkpoint("修改自动归档设置")
+        update(boardID) { $0.autoArchiveDays = days }
+        runAutoArchive()
+    }
+
     // MARK: - 看板
 
     @discardableResult
@@ -350,6 +372,21 @@ final class Store: ObservableObject {
         }
     }
 
+    /// 拖拽排序：把列表移动到 `targetID` 的前面或后面
+    func moveColumn(_ columnID: UUID, in boardID: UUID, to targetID: UUID, after: Bool) {
+        guard columnID != targetID else { return }
+        checkpoint("移动列表")
+        update(boardID) { b in
+            guard let from = b.columns.firstIndex(where: { $0.id == columnID }) else { return }
+            let column = b.columns.remove(at: from)
+            guard let target = b.columns.firstIndex(where: { $0.id == targetID }) else {
+                b.columns.insert(column, at: from)
+                return
+            }
+            b.columns.insert(column, at: after ? target + 1 : target)
+        }
+    }
+
     /// 删除列表；其中未归档的卡片会被移入归档
     func deleteColumn(_ columnID: UUID, in boardID: UUID) {
         checkpoint("删除列表")
@@ -386,13 +423,21 @@ final class Store: ObservableObject {
 
     /// 卡片编辑窗口中的实时保存（不单独记录撤销，见 registerCardEdit）
     func saveCard(_ card: Card, in boardID: UUID) {
-        updateCard(card.id, in: boardID) { $0 = card }
+        updateCard(card.id, in: boardID) { old in
+            var new = card
+            // 编辑窗口里的草稿不维护完成时间，这里统一处理
+            new.completedAt = new.isDone ? (old.isDone ? (old.completedAt ?? Date()) : Date()) : nil
+            old = new
+        }
     }
 
     func toggleDone(_ cardID: UUID, in boardID: UUID) {
         let done = card(cardID, in: boardID)?.isDone ?? false
         checkpoint(done ? "标记为未完成" : "标记为已完成")
-        updateCard(cardID, in: boardID) { $0.isDone.toggle() }
+        updateCard(cardID, in: boardID) {
+            $0.isDone.toggle()
+            $0.completedAt = $0.isDone ? Date() : nil
+        }
     }
 
     func setCardColor(_ cardID: UUID, in boardID: UUID, _ color: RGBAColor?) {
@@ -420,6 +465,8 @@ final class Store: ObservableObject {
             }
             card.isArchived = false
             card.archivedAt = nil
+            // 重新计时，避免刚恢复就被自动归档
+            if card.isDone { card.completedAt = Date() }
             b.cards.append(card)
         }
     }

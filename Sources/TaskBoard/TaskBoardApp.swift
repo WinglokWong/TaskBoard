@@ -14,16 +14,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct TaskBoardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store = Store()
+    @State private var store = Store()
+    @StateObject private var updater = AppUpdater()
 
     var body: some Scene {
         Window("任务看板", id: "main") {
             ContentView()
-                .environmentObject(store)
+                .environment(store)
                 .frame(minWidth: 900, minHeight: 560)
         }
         .defaultSize(width: 1280, height: 800)
         .commands {
+            CommandGroup(after: .appInfo) {
+                UpdateCommands(updater: updater)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("新建看板") { store.addBoard() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -52,13 +56,14 @@ enum SidebarItem: Hashable {
 }
 
 struct ContentView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     @Environment(\.undoManager) private var undoManager
     @State private var renamingBoardID: UUID?
     @State private var renameText = ""
     @State private var deletingBoardID: UUID?
 
     var body: some View {
+        @Bindable var store = store
         NavigationSplitView {
             List(selection: sidebarSelection) {
                 Section {
@@ -118,7 +123,7 @@ struct ContentView: View {
             ShortcutsView()
         }
         .sheet(isPresented: $store.showBackups) {
-            BackupsView().environmentObject(store)
+            BackupsView().environment(store)
         }
         .alert("数据读取失败", isPresented: Binding(
             get: { store.startupMessage != nil },

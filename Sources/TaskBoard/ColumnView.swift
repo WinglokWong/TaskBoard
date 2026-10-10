@@ -1,12 +1,15 @@
 import SwiftUI
 
 struct ColumnView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     let boardID: UUID
     let column: BoardColumn
     let cards: [Card]
     let isFirst: Bool
     let isLast: Bool
+    /// 看板的全部标签与列表（传给卡片，用于显示和右键菜单）
+    let boardLabels: [CardLabel]
+    let columns: [BoardColumn]
     var selectedCardID: UUID? = nil
     /// 键盘快捷键 N 请求在这一列添加卡片
     @Binding var addRequest: UUID?
@@ -23,7 +26,9 @@ struct ColumnView: View {
 
     @State private var showColor = false
     @State private var confirmDelete = false
-    @State private var dropTargeted = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dropIndicator: ColumnDropIndicator?
+    @State private var headerHovering = false
     @State private var contentHeight: CGFloat = 0
 
     private var foreground: Color { column.color?.foreground ?? .primary }
@@ -39,12 +44,19 @@ struct ColumnView: View {
             ScrollView(.vertical) {
                 VStack(spacing: 8) {
                     ForEach(cards) { card in
-                        CardView(boardID: boardID, card: card, isSelected: card.id == selectedCardID,
+                        CardView(boardID: boardID, card: card,
+                                 labels: boardLabels.filter { card.labelIDs.contains($0.id) },
+                                 boardLabels: boardLabels, columns: columns,
+                                 isSelected: card.id == selectedCardID,
                                  onOpen: { onOpen(card) },
                                  onHover: { onHoverCard(card.id, $0) })
+                        .equatable()
                         .id(card.id)
+                        .transition(Motion.cardTransition(reduceMotion))
                     }
                 }
+                // 卡片移动、增删、筛选时平滑过渡
+                .animation(Motion.move(reduceMotion), value: cards.map(\.id))
                 .padding(.horizontal, 2)
                 .padding(.vertical, 4)
                 .background(GeometryReader { g in
@@ -62,14 +74,30 @@ struct ColumnView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(background))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.accentColor, lineWidth: dropTargeted ? 2 : 0)
+                .strokeBorder(Color.accentColor, lineWidth: dropIndicator == .card ? 2 : 0)
         )
-        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
-        .dropDestination(for: String.self) { items, _ in
-            guard let id = items.compactMap(CardDrag.decode).first else { return false }
-            store.moveCard(id, in: boardID, to: column.id, before: nil)
-            return true
-        } isTargeted: { dropTargeted = $0 }
+        .overlay(alignment: dropIndicator == .after ? .trailing : .leading) {
+            // 拖动列表经过时，在左侧或右侧显示插入位置
+            if dropIndicator == .before || dropIndicator == .after {
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(width: 4)
+                    .padding(.vertical, 4)
+                    .offset(x: dropIndicator == .after ? 9 : -9)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
+        }
+        .shadow(color: .black.opacity(dropIndicator == .card ? 0.2 : 0.12), radius: dropIndicator == .card ? 6 : 2, y: 1)
+        // 列表经过时向另一侧让出空位
+        .offset(x: reduceMotion ? 0 : (dropIndicator == .before ? 8 : dropIndicator == .after ? -8 : 0))
+        .animation(Motion.gap(reduceMotion), value: dropIndicator)
+        .onDrop(of: [.taskBoardCard, .taskBoardColumn], delegate: ColumnDropDelegate(
+            columnID: column.id,
+            width: 272,
+            indicator: $dropIndicator,
+            onCard: { store.moveCard($0, in: boardID, to: column.id, before: nil) },
+            onColumn: { store.moveColumn($0, in: boardID, to: column.id, after: $1) }
+        ))
         .frame(maxHeight: .infinity, alignment: .top)
         .onChange(of: addRequest) { _, request in
             guard request == column.id else { return }
@@ -97,12 +125,20 @@ struct ColumnView: View {
                         if !focused && isRenaming { commitRename() }
                     }
             } else {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(foreground.opacity(headerHovering ? 0.7 : 0.3))
+                    .frame(width: 14, height: 20)
+                    .contentShape(Rectangle())
+                    .help("拖动调整列表顺序")
+                    .draggable(ColumnDragItem(id: column.id)) { dragPreview }
                 Text(column.name)
                     .font(.headline)
                     .foregroundStyle(foreground)
                     .lineLimit(1)
-                    .onTapGesture(count: 2, perform: beginRename)
-                    .help("双击重命名")
+                    // 用 simultaneousGesture，双击重命名不会阻止拖动
+                    .simultaneousGesture(TapGesture(count: 2).onEnded(beginRename))
+                    .help("双击重命名，拖动调整顺序")
                 Text("\(cards.count)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(foreground.opacity(0.6))
@@ -151,6 +187,18 @@ struct ColumnView: View {
         }
         .padding(.horizontal, 4)
         .frame(minHeight: 24)
+        .contentShape(Rectangle())
+        .onHover { headerHovering = $0 }
+        .draggable(ColumnDragItem(id: column.id)) { dragPreview }
+    }
+
+    private var dragPreview: some View {
+        Text(column.name)
+            .font(.headline)
+            .padding(10)
+            .frame(width: 240, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(background))
+            .foregroundStyle(foreground)
     }
 
     // MARK: - 底部
@@ -212,6 +260,63 @@ struct ColumnView: View {
     private func cancelAdding() {
         addingCard = false
         newTitle = ""
+    }
+}
+
+enum ColumnDropIndicator {
+    /// 卡片将放入这一列
+    case card
+    /// 列表将放到这一列的前面 / 后面
+    case before, after
+}
+
+/// 列表的放置处理：卡片放到列表末尾；列表根据落点在左半边还是右半边，放到前面或后面
+struct ColumnDropDelegate: DropDelegate {
+    let columnID: UUID
+    let width: CGFloat
+    @Binding var indicator: ColumnDropIndicator?
+    let onCard: (UUID) -> Void
+    let onColumn: (UUID, Bool) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.taskBoardCard, .taskBoardColumn])
+    }
+
+    func dropEntered(info: DropInfo) { update(info) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        update(info)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { indicator = nil }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let after = info.location.x > width / 2
+        indicator = nil
+        if let provider = info.itemProviders(for: [.taskBoardColumn]).first {
+            _ = provider.loadTransferable(type: ColumnDragItem.self) { result in
+                guard case .success(let item) = result, item.id != columnID else { return }
+                DispatchQueue.main.async { onColumn(item.id, after) }
+            }
+            return true
+        }
+        if let provider = info.itemProviders(for: [.taskBoardCard]).first {
+            _ = provider.loadTransferable(type: CardDragItem.self) { result in
+                guard case .success(let item) = result else { return }
+                DispatchQueue.main.async { onCard(item.id) }
+            }
+            return true
+        }
+        return false
+    }
+
+    private func update(_ info: DropInfo) {
+        if info.hasItemsConforming(to: [.taskBoardColumn]) {
+            indicator = info.location.x > width / 2 ? .after : .before
+        } else {
+            indicator = .card
+        }
     }
 }
 

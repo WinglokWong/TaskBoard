@@ -6,7 +6,7 @@ struct CardRef: Identifiable {
 }
 
 struct BoardView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     let boardID: UUID
 
     @State private var editingCard: CardRef?
@@ -21,6 +21,7 @@ struct BoardView: View {
     @State private var previewURL: URL?
     @State private var previewURLs: [URL] = []
     @State private var keyMonitor = KeyMonitor()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if let board = store.board(boardID) {
@@ -35,6 +36,7 @@ struct BoardView: View {
             VStack(spacing: 0) {
                 if filter.isActive || !trimmedSearch.isEmpty {
                     filterBar(board)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal) {
@@ -46,6 +48,8 @@ struct BoardView: View {
                                     cards: visibleCards(board, in: column.id),
                                     isFirst: index == 0,
                                     isLast: index == board.columns.count - 1,
+                                    boardLabels: board.labels,
+                                    columns: board.columns,
                                     selectedCardID: selectedCardID,
                                     addRequest: $addRequest,
                                     onOpen: { editingCard = CardRef(id: $0.id) },
@@ -54,6 +58,8 @@ struct BoardView: View {
                             }
                             AddColumnView(boardID: boardID, background: board.background)
                         }
+                        // 列表重新排序、增删时平滑过渡
+                        .animation(Motion.move(reduceMotion), value: board.columns.map(\.id))
                         .padding(16)
                         .frame(maxHeight: .infinity, alignment: .top)
                     }
@@ -65,11 +71,13 @@ struct BoardView: View {
                 }
             }
         }
+        .animation(Motion.quick, value: filter.isActive || !trimmedSearch.isEmpty)
         .navigationTitle(board.name)
         .searchable(text: $search, placement: .toolbar, prompt: "搜索卡片")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 filterMenu(board)
+                settingsMenu(board)
 
                 Button {
                     showBackground.toggle()
@@ -110,7 +118,7 @@ struct BoardView: View {
         .sheet(item: $editingCard) { ref in
             if let card = store.card(ref.id, in: boardID) {
                 CardEditorView(boardID: boardID, card: card)
-                    .environmentObject(store)
+                    .environment(store)
             }
         }
         .sheet(isPresented: $showArchive) {
@@ -118,7 +126,7 @@ struct BoardView: View {
                 showArchive = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { editingCard = CardRef(id: card.id) }
             })
-            .environmentObject(store)
+            .environment(store)
         }
     }
 
@@ -157,6 +165,21 @@ struct BoardView: View {
                 .labelStyle(.titleAndIcon)
         }
         .help("按标签、状态或截止日期筛选卡片")
+    }
+
+    private func settingsMenu(_ board: Board) -> some View {
+        Menu {
+            Picker("自动归档已完成的卡片", selection: Binding(
+                get: { store.board(boardID)?.autoArchiveDays },
+                set: { store.setAutoArchive(boardID, days: $0) }
+            )) {
+                ForEach(AutoArchiveOption.all) { Text($0.title).tag($0.days) }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("看板设置", systemImage: board.autoArchiveDays == nil ? "gearshape" : "gearshape.fill")
+        }
+        .help(board.autoArchiveDays.map { "已开启自动归档：完成 \($0) 天后" } ?? "看板设置")
     }
 
     private func filterBar(_ board: Board) -> some View {
@@ -294,7 +317,7 @@ struct BoardView: View {
 }
 
 struct AddColumnView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     let boardID: UUID
     let background: RGBAColor
 

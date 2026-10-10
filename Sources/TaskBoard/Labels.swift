@@ -85,7 +85,7 @@ struct FlowLayout: Layout {
 
 /// 选择 / 管理看板标签的弹出面板
 struct LabelPickerView: View {
-    @EnvironmentObject private var store: Store
+    @Environment(Store.self) private var store
     let boardID: UUID
     @Binding var selection: [UUID]
 

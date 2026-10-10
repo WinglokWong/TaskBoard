@@ -7,7 +7,10 @@ The app's interface is in Chinese (app name: 任务看板).
 ## Features
 
 - **Multiple boards**: create, rename and delete boards from the sidebar.
-- **Custom lists**: starts with To Do / In Progress / Done. You can rename lists (double-click the title), add, delete and reorder them.
+- **Custom lists**:
+  - A new board starts with To Do / In Progress / Done.
+  - Add, delete and rename lists (double-click the title).
+  - Reorder lists by dragging the ≡ handle or the title. A blue bar shows where the list will land.
 - **Cards**:
   - Each card has a title, a description and attachments.
   - Mark a card done with one click; it gets a check and a strikethrough.
@@ -18,6 +21,10 @@ The app's interface is in Chinese (app name: 任务看板).
   - The first image becomes the card's cover, and you can choose a different one.
   - Click an attachment to open it in its default app.
 - **Colors everywhere**: cards, lists and the board background each take a color. Pick from 24 presets or the system color picker (opacity supported). Text switches between black and white for contrast.
+- **Markdown descriptions**:
+  - Card descriptions render headings, lists, task lists, bold, italic, code, links, quotes and code blocks.
+  - Double-click the description, or click **Edit** (编辑), to change it.
+- **Auto-archive**: per board, done cards can archive themselves 1, 3, 7 or 30 days after completion. Set it in the board's gear menu (看板设置).
 - **Archive**:
   - Archive single cards, or all done cards in a list at once.
   - Browse, search, restore or permanently delete archived cards.
@@ -53,6 +60,11 @@ The app's interface is in Chinese (app name: 任务看板).
 - **Checklists**: add sub-tasks inside a card. The card shows progress such as `3/5`, which turns green when everything is checked.
 - **Undo / Redo**: ⌘Z and ⇧⌘Z work for every board action, including deleting cards, lists and boards. All edits made in one card-editor session undo as a single step.
 - **Search**: find cards by title, description or checklist items from the toolbar.
+- **Smooth motion**:
+  - Cards and lists animate when they move, appear or disappear.
+  - Drop targets open up space while you drag.
+  - With **Reduce Motion** turned on, movement is replaced by simple fades.
+- **Automatic updates**: since 1.3.0 the app updates itself through [Sparkle](https://sparkle-project.org). It checks daily, or on demand from **任务看板 → 检查更新…**.
 - **Auto-save & backups**:
   - Changes are written to disk automatically.
   - A backup is taken once a day, and the last 30 are kept.
@@ -75,6 +87,8 @@ The app's interface is in Chinese (app name: 任务看板).
 
 Runs on macOS 14 Sonoma or later, on both Apple Silicon and Intel Macs.
 
+From 1.3.0 on, new versions are offered inside the app, so you only need to install manually once. Versions 1.2.0 and earlier don't include the updater; download 1.3.0 or later once to get it.
+
 ## Requirements (for building)
 
 - macOS 14 Sonoma or later
@@ -91,10 +105,35 @@ This compiles a universal (arm64 + x86_64) release build, generates the app icon
 To produce a distributable DMG:
 
 ```bash
-VERSION=1.0.0 scripts/package_dmg.sh
+VERSION=1.3.0 scripts/package_dmg.sh
 ```
 
-This writes `build/TaskBoard-1.0.0.dmg`.
+This writes `build/TaskBoard-1.3.0.dmg`.
+
+### Releasing
+
+Write the release notes in a Markdown file, commit everything, then run:
+
+```bash
+scripts/release.sh 1.3.0 path/to/notes.md
+```
+
+The script:
+
+1. Builds the DMG, using the commit count as the build number. Sparkle compares build numbers, so they must always increase.
+2. Signs the DMG with the Sparkle EdDSA private key.
+3. Tags the release and publishes it on GitHub with the DMG attached.
+4. Adds the version to [`appcast.xml`](appcast.xml) and pushes it. Running apps read this feed to find updates.
+
+The appcast is updated last, so apps never see an update before its download exists.
+
+> **Signing key:** the private key lives in the login Keychain of the Mac that ran Sparkle's `generate_keys`. The matching public key is in `build.sh` (`SUPublicEDKey`). Back up the private key:
+>
+> ```bash
+> .build/artifacts/sparkle/Sparkle/bin/generate_keys -x sparkle-private-key.txt
+> ```
+>
+> Store the file somewhere safe, outside this repository. Without the key, existing installs can't verify new updates.
 
 For development you can also run it directly:
 
@@ -135,8 +174,14 @@ Sources/TaskBoard/
 ├── Filters.swift         # Board filter and due-date categories
 ├── UpcomingView.swift    # Cross-board due-date overview
 ├── Keyboard.swift        # Board keyboard shortcuts and help sheet
+├── Markdown.swift        # Lightweight Markdown renderer for descriptions
+├── Motion.swift          # Shared animation timings (respects Reduce Motion)
+├── Updater.swift         # Sparkle auto-update integration
 └── ImageCache.swift      # Downsampled thumbnail cache
 scripts/make_icon.swift   # Draws the app icon
 scripts/package_dmg.sh    # Builds and packages a release DMG
+scripts/release.sh        # Full release: DMG, signing, GitHub release, appcast
+scripts/update_appcast.py # Adds a release entry to appcast.xml
+appcast.xml               # Sparkle update feed (written by release.sh)
 build.sh                  # Builds and packages the .app bundle
 ```

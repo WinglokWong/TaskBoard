@@ -1,5 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
+import CoreTransferable
 
 // 数据模型说明：
 // 所有模型都使用容错解码（见文件末尾的 Decodable 扩展）。新增字段时务必在解码扩展里给出默认值，
@@ -55,6 +56,8 @@ struct Card: Identifiable, Codable, Hashable {
     var reminderMinutes: Int? = nil
     var createdAt = Date()
     var archivedAt: Date? = nil
+    /// 标记完成的时间，用于自动归档
+    var completedAt: Date? = nil
 
     var coverImage: Attachment? { attachments.first(where: \.isImage) }
 
@@ -86,6 +89,20 @@ struct ReminderOption: Identifiable {
     ]
 }
 
+struct AutoArchiveOption: Identifiable {
+    let days: Int?
+    let title: String
+    var id: String { title }
+
+    static let all: [AutoArchiveOption] = [
+        .init(days: nil, title: "关闭"),
+        .init(days: 1, title: "完成 1 天后"),
+        .init(days: 3, title: "完成 3 天后"),
+        .init(days: 7, title: "完成 7 天后"),
+        .init(days: 30, title: "完成 30 天后"),
+    ]
+}
+
 struct BoardColumn: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
@@ -100,6 +117,8 @@ struct Board: Identifiable, Codable, Hashable {
     /// 所有卡片（包括已归档）。在同一列内，数组顺序即显示顺序。
     var cards: [Card] = []
     var labels: [CardLabel] = Board.defaultLabels
+    /// 已完成的卡片在多少天后自动归档；nil 表示关闭
+    var autoArchiveDays: Int? = nil
 
     func columnName(_ id: UUID?) -> String? {
         columns.first(where: { $0.id == id })?.name
@@ -119,7 +138,7 @@ struct Board: Identifiable, Codable, Hashable {
 
 struct AppData: Codable, Equatable {
     /// 数据格式版本。修改数据结构时递增。
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
 
     var schemaVersion = AppData.currentSchemaVersion
     var boards: [Board]
@@ -127,6 +146,31 @@ struct AppData: Codable, Equatable {
 
     var attachmentFileNames: Set<String> {
         Set(boards.flatMap { $0.cards.flatMap { $0.attachments.map(\.fileName) } })
+    }
+
+    /// 自动归档：在开启了自动归档的看板中，归档完成时间超过设定天数的卡片。
+    /// 没有完成时间的已完成卡片（升级前完成的）从现在开始计时。返回是否有改动。
+    mutating func applyAutoArchive(now: Date) -> Bool {
+        var changed = false
+        for bi in boards.indices {
+            guard let days = boards[bi].autoArchiveDays else { continue }
+            let limit = Double(days) * 24 * 3600
+            for ci in boards[bi].cards.indices {
+                let card = boards[bi].cards[ci]
+                guard card.isDone, !card.isArchived else { continue }
+                if let completed = card.completedAt {
+                    if now.timeIntervalSince(completed) >= limit {
+                        boards[bi].cards[ci].isArchived = true
+                        boards[bi].cards[ci].archivedAt = now
+                        changed = true
+                    }
+                } else {
+                    boards[bi].cards[ci].completedAt = now
+                    changed = true
+                }
+            }
+        }
+        return changed
     }
 
     static var sample: AppData {
@@ -157,103 +201,23 @@ extension Board {
     }
 }
 
-/// 拖拽卡片时使用的字符串载荷
-enum CardDrag {
-    static let prefix = "taskboard-card:"
+extension UTType {
+    // 应用内拖拽专用类型（在 Info.plist 的 UTExportedTypeDeclarations 中声明）。
+    // 卡片和列表分开，这样拖动经过时就能知道拖的是什么，从而显示正确的放置提示。
+    static let taskBoardCard = UTType(exportedAs: "local.taskboard.card")
+    static let taskBoardColumn = UTType(exportedAs: "local.taskboard.column")
+}
 
-    static func encode(_ id: UUID) -> String { prefix + id.uuidString }
-
-    static func decode(_ string: String) -> UUID? {
-        guard string.hasPrefix(prefix) else { return nil }
-        return UUID(uuidString: String(string.dropFirst(prefix.count)))
+struct CardDragItem: Codable, Transferable {
+    let id: UUID
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .taskBoardCard)
     }
 }
 
-// MARK: - 容错解码
-
-extension KeyedDecodingContainer {
-    /// 字段缺失或类型不匹配时返回默认值，而不是让整个解码失败。
-    /// 只用于标量字段；数组字段要用 decodeIfPresent，避免一个元素出错就把整个数组清空后保存覆盖。
-    func value<T: Decodable>(_ key: Key, default fallback: @autoclosure () -> T) -> T {
-        ((try? decodeIfPresent(T.self, forKey: key)) ?? nil) ?? fallback()
-    }
-}
-
-extension Attachment {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = c.value(.id, default: UUID())
-        fileName = try c.decode(String.self, forKey: .fileName)
-        originalName = c.value(.originalName, default: fileName)
-    }
-}
-
-extension CardLabel {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = c.value(.id, default: UUID())
-        name = c.value(.name, default: "")
-        color = c.value(.color, default: RGBAColor(hex: 0x8590A2))
-    }
-}
-
-extension ChecklistItem {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = c.value(.id, default: UUID())
-        text = c.value(.text, default: "")
-        isDone = c.value(.isDone, default: false)
-    }
-}
-
-extension Card {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = c.value(.id, default: UUID())
-        columnID = c.value(.columnID, default: nil)
-        title = c.value(.title, default: "")
-        details = c.value(.details, default: "")
-        attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
-        checklist = try c.decodeIfPresent([ChecklistItem].self, forKey: .checklist) ?? []
-        labelIDs = c.value(.labelIDs, default: [])
-        color = c.value(.color, default: nil)
-        isDone = c.value(.isDone, default: false)
-        isArchived = c.value(.isArchived, default: false)
-        dueDate = c.value(.dueDate, default: nil)
-        reminderMinutes = c.value(.reminderMinutes, default: nil)
-        createdAt = c.value(.createdAt, default: Date())
-        archivedAt = c.value(.archivedAt, default: nil)
-    }
-}
-
-extension BoardColumn {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = c.value(.id, default: UUID())
-        name = c.value(.name, default: "未命名列表")
-        color = c.value(.color, default: nil)
-    }
-}
-
-extension Board {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = c.value(.id, default: UUID())
-        name = c.value(.name, default: "未命名看板")
-        background = c.value(.background, default: RGBAColor(hex: 0x0C66E4))
-        columns = try c.decodeIfPresent([BoardColumn].self, forKey: .columns) ?? []
-        cards = try c.decodeIfPresent([Card].self, forKey: .cards) ?? []
-        // 旧版本没有标签：给一套默认颜色标签
-        labels = try c.decodeIfPresent([CardLabel].self, forKey: .labels) ?? Board.defaultLabels
-    }
-}
-
-extension AppData {
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = c.value(.schemaVersion, default: 1)
-        // boards 是唯一必须存在的字段：如果连它都读不到，说明文件确实损坏了
-        boards = try c.decode([Board].self, forKey: .boards)
-        selectedBoardID = c.value(.selectedBoardID, default: nil)
+struct ColumnDragItem: Codable, Transferable {
+    let id: UUID
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .taskBoardColumn)
     }
 }

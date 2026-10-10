@@ -5,17 +5,25 @@ cd "$(dirname "$0")"
 
 APP_NAME="任务看板"
 APP="build/${APP_NAME}.app"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-0.0.0-dev}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
+
+# Sparkle 自动更新
+FEED_URL="https://raw.githubusercontent.com/WinglokWong/TaskBoard/main/appcast.xml"
+# 对应的私钥保存在发布者 Mac 的钥匙串中（由 Sparkle 的 generate_keys 生成）
+SPARKLE_PUBLIC_KEY="V6Hnh6QMxTCvrzGMeJ/bKPGEWckUPTwP3eoqd6n7aBQ="
 
 # 通用二进制：同时支持 Apple Silicon 和 Intel
 ARCH_FLAGS=(--arch arm64 --arch x86_64)
 swift build -c release "${ARCH_FLAGS[@]}"
-BIN="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)/TaskBoard"
+PRODUCTS="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/TaskBoard"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+cp "$PRODUCTS/TaskBoard" "$APP/Contents/MacOS/TaskBoard"
+# 嵌入 Sparkle.framework（ditto 保留框架内的符号链接）
+ditto "$PRODUCTS/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/TaskBoard"
 
 ICONSET="build/AppIcon.iconset"
 rm -rf "$ICONSET"
@@ -41,9 +49,27 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>SUFeedURL</key><string>${FEED_URL}</string>
+    <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key><string>local.taskboard.card</string>
+            <key>UTTypeDescription</key><string>TaskBoard Card</string>
+            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key><string>local.taskboard.column</string>
+            <key>UTTypeDescription</key><string>TaskBoard List</string>
+            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP"
+# 先签名框架，再签名应用（临时签名）
+codesign --force --deep --sign - "$APP/Contents/Frameworks/Sparkle.framework"
+codesign --force --sign - "$APP"
 echo "✅ 已生成: $(pwd)/$APP"
