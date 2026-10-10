@@ -6,6 +6,42 @@
     <description>TaskBoard updates</description>
     <language>zh-cn</language>
     <item>
+      <title>Version 1.4.1</title>
+      <pubDate>Sat, 10 Oct 2026 07:26:17 GMT</pubDate>
+      <sparkle:version>9</sparkle:version>
+      <sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/WinglokWong/TaskBoard/releases/tag/v1.4.1</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h2 dir="auto">What's improved</h2>
+<ul dir="auto">
+<li><strong>Card dragging with a live preview</strong>:
+<ul dir="auto">
+<li>The card moves into its new spot as you drag, and the other cards slide apart to make room. This works within a list and across lists.</li>
+<li>The target list is outlined, and releasing leaves the card exactly where the preview showed it, with no extra animation.</li>
+<li>Dropping outside the board or pressing Esc cancels.</li>
+</ul>
+</li>
+<li><strong>More reliable drops</strong>: where a card lands is worked out from each card's actual position on screen, so tall cards, empty lists and list headers all behave as expected.</li>
+<li><strong>Cleaner undo</strong>: dropping a card back where it started no longer adds a step to ⌘Z.</li>
+<li><strong>Smoother transitions</strong>: lists fade in and out when added or deleted, and switching boards (or to Due Soon) cross-fades.</li>
+</ul>
+<h2 dir="auto">Install</h2>
+<ul dir="auto">
+<li><strong>On 1.3.0 or later:</strong> use <strong>Check for Updates…</strong> in the app menu, or wait for the automatic check.</li>
+<li><strong>New install:</strong>
+<ol dir="auto">
+<li>Download <strong>TaskBoard-1.4.1.dmg</strong> below and drag <strong>TaskBoard</strong> into <strong>Applications</strong>.</li>
+<li>The first launch is blocked because the app isn't notarized by Apple. Go to <strong>System Settings → Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>, or run this in Terminal:
+<pre class="notranslate"><code class="notranslate">xattr -dr com.apple.quarantine "/Applications/TaskBoard.app"
+</code></pre>
+</li>
+</ol>
+</li>
+</ul>
+<p dir="auto"><strong>Requirements:</strong> macOS 14 Sonoma or later. The DMG is a universal build for Apple Silicon and Intel Macs.</p>]]></description>
+      <enclosure url="https://github.com/WinglokWong/TaskBoard/releases/download/v1.4.1/TaskBoard-1.4.1.dmg" sparkle:edSignature="w9oEJC1jAivFPt3xkG4V9kU1PeKMXdzS5PQk8qTeQsl5lnGICVR4nRHjeQbQWM4EF+IRoMHEFbVk7YuhjefvDg==" length="3567220" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.4.0</title>
       <pubDate>Sat, 10 Oct 2026 07:02:01 GMT</pubDate>
       <sparkle:version>7</sparkle:version>
