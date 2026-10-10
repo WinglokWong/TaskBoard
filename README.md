@@ -26,9 +26,33 @@ The app's interface is in Chinese (app name: 任务看板).
   - Give a card a due date and time.
   - The card badge turns orange when it's due within 24 hours, red when overdue, and green once done.
   - Optionally get a macOS notification at the due time, or 15 minutes, 1 hour or 1 day before. Clicking the notification opens the card.
+- **Labels**:
+  - Each board has its own colored labels; a label's name is optional.
+  - A card can have several labels, shown as small pills at its top.
+  - Manage labels from the card editor, or toggle them by right-clicking a card.
+- **Filters**:
+  - Filter a board by label (matches any selected), status (open or done), or due date (overdue, today, next 7 days, or no due date).
+  - Filters combine with search. A bar above the board shows what's active and how many cards match.
+- **Upcoming view**:
+  - A sidebar entry that collects due cards from every board, grouped as overdue, today, tomorrow, next 7 days and later.
+  - The sidebar badge counts unfinished cards that are overdue or due today.
+- **Quick Look**: click an attachment, or press Space on a selected card, to preview attachments in place.
+- **Keyboard shortcuts** (on the board, when no text field is being edited):
+
+  | Key | Action |
+  | --- | --- |
+  | Arrow keys | Move the selection (hovering also selects) |
+  | Return | Open the card |
+  | Space | Quick Look the card's attachments |
+  | D | Toggle done |
+  | Delete | Archive |
+  | N | New card in the current list |
+  | Esc | Clear the selection |
+
+  **Help → Keyboard Shortcuts** (⌘/) shows this list in the app.
 - **Checklists**: add sub-tasks inside a card. The card shows progress such as `3/5`, which turns green when everything is checked.
 - **Undo / Redo**: ⌘Z and ⇧⌘Z work for every board action, including deleting cards, lists and boards. All edits made in one card-editor session undo as a single step.
-- **Search**: filter cards by title, description or checklist items from the toolbar.
+- **Search**: find cards by title, description or checklist items from the toolbar.
 - **Auto-save & backups**:
   - Changes are written to disk automatically.
   - A backup is taken once a day, and the last 30 are kept.
@@ -107,6 +131,10 @@ Sources/TaskBoard/
 ├── ArchiveView.swift     # Archived cards browser
 ├── BackupsView.swift     # Backup list and restore
 ├── Notifications.swift   # Due-date reminders (UserNotifications)
+├── Labels.swift          # Label pills, flow layout, label picker
+├── Filters.swift         # Board filter and due-date categories
+├── UpcomingView.swift    # Cross-board due-date overview
+├── Keyboard.swift        # Board keyboard shortcuts and help sheet
 └── ImageCache.swift      # Downsampled thumbnail cache
 scripts/make_icon.swift   # Draws the app icon
 scripts/package_dmg.sh    # Builds and packages a release DMG

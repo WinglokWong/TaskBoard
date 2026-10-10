@@ -38,8 +38,17 @@ struct TaskBoardApp: App {
                 Button("立即备份") { store.backupNow() }
                 Button("从备份恢复…") { store.showBackups = true }
             }
+            CommandGroup(replacing: .help) {
+                Button("键盘快捷键") { store.showShortcuts = true }
+                    .keyboardShortcut("/", modifiers: .command)
+            }
         }
     }
+}
+
+enum SidebarItem: Hashable {
+    case upcoming
+    case board(UUID)
 }
 
 struct ContentView: View {
@@ -51,7 +60,13 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $store.data.selectedBoardID) {
+            List(selection: sidebarSelection) {
+                Section {
+                    Label("即将到期", systemImage: "calendar.badge.clock")
+                        .badge(urgentCount)
+                        .tag(SidebarItem.upcoming)
+                        .help("已过期和今天到期的未完成卡片数")
+                }
                 Section("看板") {
                     ForEach(store.data.boards) { board in
                         Label {
@@ -61,7 +76,7 @@ struct ContentView: View {
                                 .fill(board.background.color)
                                 .frame(width: 16, height: 16)
                         }
-                        .tag(board.id)
+                        .tag(SidebarItem.board(board.id))
                         .contextMenu {
                             Button("重命名…") { beginRename(board) }
                             Divider()
@@ -83,7 +98,9 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
-            if let id = store.data.selectedBoardID, store.board(id) != nil {
+            if store.showingUpcoming {
+                UpcomingView()
+            } else if let id = store.data.selectedBoardID, store.board(id) != nil {
                 BoardView(boardID: id).id(id)
             } else {
                 ContentUnavailableView("没有选中的看板", systemImage: "rectangle.split.3x1",
@@ -97,6 +114,9 @@ struct ContentView: View {
             }
         }
         .onChange(of: undoManager) { _, manager in store.undoManager = manager }
+        .sheet(isPresented: $store.showShortcuts) {
+            ShortcutsView()
+        }
         .sheet(isPresented: $store.showBackups) {
             BackupsView().environmentObject(store)
         }
@@ -128,6 +148,37 @@ struct ContentView: View {
             }
         } message: {
             Text("看板中的所有卡片和附件（包括归档）都会被永久删除。")
+        }
+    }
+
+    private var sidebarSelection: Binding<SidebarItem?> {
+        Binding(
+            get: {
+                if store.showingUpcoming { return .upcoming }
+                return store.data.selectedBoardID.map { .board($0) }
+            },
+            set: { item in
+                switch item {
+                case .upcoming:
+                    store.showingUpcoming = true
+                case .board(let id):
+                    store.showingUpcoming = false
+                    if store.data.selectedBoardID != id { store.data.selectedBoardID = id }
+                case nil:
+                    break
+                }
+            }
+        )
+    }
+
+    /// 已过期或今天到期的未完成卡片数
+    private var urgentCount: Int {
+        let now = Date()
+        return store.data.boards.reduce(0) { total, board in
+            total + board.cards.filter { card in
+                guard !card.isDone, !card.isArchived, let due = card.dueDate else { return false }
+                return due < now || Calendar.current.isDateInToday(due)
+            }.count
         }
     }
 

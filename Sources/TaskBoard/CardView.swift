@@ -4,7 +4,9 @@ struct CardView: View {
     @EnvironmentObject private var store: Store
     let boardID: UUID
     let card: Card
+    var isSelected = false
     var onOpen: () -> Void
+    var onHover: (Bool) -> Void = { _ in }
 
     @State private var dropTargeted = false
     @State private var hovering = false
@@ -20,8 +22,13 @@ struct CardView: View {
         card.color?.color ?? Color(nsColor: .controlBackgroundColor)
     }
 
+    private var labels: [CardLabel] { store.board(boardID)?.labels(of: card) ?? [] }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if !labels.isEmpty {
+                LabelRow(labels: labels)
+            }
             if let cover = card.coverImage, let image = ImageCache.shared.thumbnail(for: cover) {
                 Color.clear
                     .frame(height: 130)
@@ -79,7 +86,8 @@ struct CardView: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(background))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(hovering ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.06), lineWidth: hovering ? 1.5 : 1)
+                .strokeBorder(isSelected ? Color.accentColor : (hovering ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.06)),
+                              lineWidth: isSelected ? 2 : (hovering ? 1.5 : 1))
         )
         .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
         .overlay(alignment: .top) {
@@ -88,7 +96,10 @@ struct CardView: View {
             }
         }
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            hovering = inside
+            onHover(inside)
+        }
         .onTapGesture(perform: onOpen)
         .draggable(CardDrag.encode(card.id)) {
             Text(card.title)
@@ -106,7 +117,7 @@ struct CardView: View {
         .confirmationDialog("确定删除卡片「\(card.title)」吗？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { store.deleteCard(card.id, in: boardID) }
         } message: {
-            Text("此操作无法撤销。如果只是暂时不需要，可以选择归档。")
+            Text("可以用 ⌘Z 撤销。如果只是暂时不需要，也可以选择归档。")
         }
     }
 
@@ -119,6 +130,16 @@ struct CardView: View {
             Divider()
             ForEach(Palette.presets) { preset in
                 Button(preset.name) { store.setCardColor(card.id, in: boardID, preset.value) }
+            }
+        }
+        if let board = store.board(boardID), !board.labels.isEmpty {
+            Menu("标签") {
+                ForEach(board.labels) { label in
+                    Toggle(label.displayName, isOn: Binding(
+                        get: { card.labelIDs.contains(label.id) },
+                        set: { _ in store.toggleLabel(label.id, on: card.id, in: boardID) }
+                    ))
+                }
             }
         }
         if let board = store.board(boardID), board.columns.count > 1 {

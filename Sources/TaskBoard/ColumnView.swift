@@ -7,7 +7,11 @@ struct ColumnView: View {
     let cards: [Card]
     let isFirst: Bool
     let isLast: Bool
+    var selectedCardID: UUID? = nil
+    /// 键盘快捷键 N 请求在这一列添加卡片
+    @Binding var addRequest: UUID?
     var onOpen: (Card) -> Void
+    var onHoverCard: (UUID, Bool) -> Void = { _, _ in }
 
     @State private var isRenaming = false
     @State private var nameDraft = ""
@@ -35,7 +39,10 @@ struct ColumnView: View {
             ScrollView(.vertical) {
                 VStack(spacing: 8) {
                     ForEach(cards) { card in
-                        CardView(boardID: boardID, card: card, onOpen: { onOpen(card) })
+                        CardView(boardID: boardID, card: card, isSelected: card.id == selectedCardID,
+                                 onOpen: { onOpen(card) },
+                                 onHover: { onHoverCard(card.id, $0) })
+                        .id(card.id)
                     }
                 }
                 .padding(.horizontal, 2)
@@ -64,6 +71,11 @@ struct ColumnView: View {
             return true
         } isTargeted: { dropTargeted = $0 }
         .frame(maxHeight: .infinity, alignment: .top)
+        .onChange(of: addRequest) { _, request in
+            guard request == column.id else { return }
+            addRequest = nil
+            startAdding()
+        }
         .confirmationDialog("确定删除列表「\(column.name)」吗？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除列表", role: .destructive) { store.deleteColumn(column.id, in: boardID) }
         } message: {

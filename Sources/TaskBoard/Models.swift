@@ -20,6 +20,19 @@ struct Attachment: Identifiable, Codable, Hashable {
     }
 }
 
+struct CardLabel: Identifiable, Codable, Hashable {
+    var id = UUID()
+    /// 可以为空：只用颜色区分
+    var name: String = ""
+    var color: RGBAColor
+
+    var displayName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { return trimmed }
+        return Palette.name(for: color).map { "\($0)色标签" } ?? "未命名标签"
+    }
+}
+
 struct ChecklistItem: Identifiable, Codable, Hashable {
     var id = UUID()
     var text: String
@@ -33,6 +46,7 @@ struct Card: Identifiable, Codable, Hashable {
     var details: String = ""
     var attachments: [Attachment] = []
     var checklist: [ChecklistItem] = []
+    var labelIDs: [UUID] = []
     var color: RGBAColor? = nil
     var isDone = false
     var isArchived = false
@@ -85,15 +99,27 @@ struct Board: Identifiable, Codable, Hashable {
     var columns: [BoardColumn]
     /// 所有卡片（包括已归档）。在同一列内，数组顺序即显示顺序。
     var cards: [Card] = []
+    var labels: [CardLabel] = Board.defaultLabels
 
     func columnName(_ id: UUID?) -> String? {
         columns.first(where: { $0.id == id })?.name
+    }
+
+    /// 卡片上的标签，按看板中标签的顺序排列，忽略已删除的标签
+    func labels(of card: Card) -> [CardLabel] {
+        labels.filter { card.labelIDs.contains($0.id) }
+    }
+
+    static var defaultLabels: [CardLabel] {
+        ["绿", "黄", "橙", "红", "紫", "蓝"].compactMap { name in
+            Palette.color(named: name).map { CardLabel(color: $0) }
+        }
     }
 }
 
 struct AppData: Codable, Equatable {
     /// 数据格式版本。修改数据结构时递增。
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion = AppData.currentSchemaVersion
     var boards: [Board]
@@ -162,6 +188,15 @@ extension Attachment {
     }
 }
 
+extension CardLabel {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.value(.id, default: UUID())
+        name = c.value(.name, default: "")
+        color = c.value(.color, default: RGBAColor(hex: 0x8590A2))
+    }
+}
+
 extension ChecklistItem {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -180,6 +215,7 @@ extension Card {
         details = c.value(.details, default: "")
         attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
         checklist = try c.decodeIfPresent([ChecklistItem].self, forKey: .checklist) ?? []
+        labelIDs = c.value(.labelIDs, default: [])
         color = c.value(.color, default: nil)
         isDone = c.value(.isDone, default: false)
         isArchived = c.value(.isArchived, default: false)
@@ -207,6 +243,8 @@ extension Board {
         background = c.value(.background, default: RGBAColor(hex: 0x0C66E4))
         columns = try c.decodeIfPresent([BoardColumn].self, forKey: .columns) ?? []
         cards = try c.decodeIfPresent([Card].self, forKey: .cards) ?? []
+        // 旧版本没有标签：给一套默认颜色标签
+        labels = try c.decodeIfPresent([CardLabel].self, forKey: .labels) ?? Board.defaultLabels
     }
 }
 

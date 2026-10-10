@@ -78,6 +78,10 @@ enum Palette {
         .init(name: "墨", value: RGBAColor(hex: 0x172B4D)),
     ]
 
+    static func name(for color: RGBAColor) -> String? {
+        presets.first(where: { $0.value.isClose(to: color) })?.name
+    }
+
     static func color(named name: String) -> RGBAColor? {
         presets.first(where: { $0.name == name })?.value
     }

@@ -22,6 +22,9 @@ final class Store: ObservableObject {
     /// 启动时需要告知用户的问题（例如数据文件无法读取）
     @Published var startupMessage: String?
     @Published var showBackups = false
+    @Published var showShortcuts = false
+    /// 侧边栏是否选中了“即将到期”（不保存到文件）
+    @Published var showingUpcoming = false
     @Published var openRequest: CardOpenRequest?
 
     /// 由主窗口注入，用于撤销 / 重做
@@ -276,6 +279,7 @@ final class Store: ObservableObject {
 
     func requestOpen(cardID: UUID, in boardID: UUID) {
         guard card(cardID, in: boardID) != nil else { return }
+        showingUpcoming = false
         data.selectedBoardID = boardID
         openRequest = CardOpenRequest(boardID: boardID, cardID: cardID)
     }
@@ -289,6 +293,7 @@ final class Store: ObservableObject {
         board.background = Palette.presets.filter { $0.value.luminance < 0.6 }.randomElement()?.value ?? board.background
         data.boards.append(board)
         data.selectedBoardID = board.id
+        showingUpcoming = false
         return board.id
     }
 
@@ -441,6 +446,52 @@ final class Store: ObservableObject {
                 b.cards.insert(card, at: target)
             } else {
                 b.cards.append(card)
+            }
+        }
+    }
+
+    // MARK: - 标签
+
+    @discardableResult
+    func addLabel(to boardID: UUID, name: String = "", color: RGBAColor) -> UUID {
+        checkpoint("新建标签")
+        let label = CardLabel(name: name.trimmingCharacters(in: .whitespacesAndNewlines), color: color)
+        update(boardID) { $0.labels.append(label) }
+        return label.id
+    }
+
+    func renameLabel(_ labelID: UUID, in boardID: UUID, to name: String) {
+        checkpoint("重命名标签", coalesce: true)
+        update(boardID) { b in
+            if let i = b.labels.firstIndex(where: { $0.id == labelID }) {
+                b.labels[i].name = name
+            }
+        }
+    }
+
+    func setLabelColor(_ labelID: UUID, in boardID: UUID, _ color: RGBAColor) {
+        checkpoint("修改标签颜色", coalesce: true)
+        update(boardID) { b in
+            if let i = b.labels.firstIndex(where: { $0.id == labelID }) { b.labels[i].color = color }
+        }
+    }
+
+    /// 删除标签，并从所有卡片上移除
+    func deleteLabel(_ labelID: UUID, in boardID: UUID) {
+        checkpoint("删除标签")
+        update(boardID) { b in
+            b.labels.removeAll { $0.id == labelID }
+            for i in b.cards.indices { b.cards[i].labelIDs.removeAll { $0 == labelID } }
+        }
+    }
+
+    func toggleLabel(_ labelID: UUID, on cardID: UUID, in boardID: UUID) {
+        checkpoint("修改卡片标签")
+        updateCard(cardID, in: boardID) { card in
+            if card.labelIDs.contains(labelID) {
+                card.labelIDs.removeAll { $0 == labelID }
+            } else {
+                card.labelIDs.append(labelID)
             }
         }
     }

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import QuickLook
 
 struct CardEditorView: View {
     @EnvironmentObject private var store: Store
@@ -16,6 +17,8 @@ struct CardEditorView: View {
     @State private var confirmDelete = false
     @State private var importing = false
     @State private var dropTargeted = false
+    @State private var showLabelPicker = false
+    @State private var previewURL: URL?
 
     init(boardID: UUID, card: Card) {
         self.boardID = boardID
@@ -36,6 +39,7 @@ struct CardEditorView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     titleSection
                     statusSection
+                    labelsSection
                     dueDateSection
                     section("描述", systemImage: "text.alignleft") {
                         TextEditor(text: $draft.details)
@@ -62,6 +66,7 @@ struct CardEditorView: View {
         .onChange(of: draft) { _, newValue in
             store.saveCard(newValue, in: boardID)
         }
+        .quickLookPreview($previewURL, in: draft.attachments.map(\.url))
         .onAppear(perform: refreshNotificationStatus)
         .onDisappear {
             store.registerCardEdit(original: original, in: boardID)
@@ -98,6 +103,29 @@ struct CardEditorView: View {
                 .font(.title2.weight(.semibold))
                 .textFieldStyle(.plain)
                 .strikethrough(draft.isDone)
+        }
+    }
+
+    private var labelsSection: some View {
+        section("标签", systemImage: "tag") {
+            let labels = store.board(boardID)?.labels.filter { draft.labelIDs.contains($0.id) } ?? []
+            HStack(alignment: .top, spacing: 8) {
+                if !labels.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(labels) { LabelPill(label: $0) }
+                    }
+                }
+                Button {
+                    showLabelPicker.toggle()
+                } label: {
+                    Label(labels.isEmpty ? "添加标签" : "编辑", systemImage: labels.isEmpty ? "plus" : "pencil")
+                }
+                .popover(isPresented: $showLabelPicker, arrowEdge: .bottom) {
+                    LabelPickerView(boardID: boardID, selection: $draft.labelIDs)
+                        .environmentObject(store)
+                }
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -252,6 +280,7 @@ struct CardEditorView: View {
                             AttachmentTile(
                                 attachment: attachment,
                                 isCover: attachment.id == draft.coverImage?.id,
+                                onPreview: { previewURL = attachment.url },
                                 onMakeCover: { makeCover(attachment) },
                                 onDelete: { removeAttachment(attachment) }
                             )
@@ -374,6 +403,7 @@ struct ChecklistRow: View {
 struct AttachmentTile: View {
     let attachment: Attachment
     var isCover: Bool
+    var onPreview: () -> Void
     var onMakeCover: () -> Void
     var onDelete: () -> Void
 
@@ -427,10 +457,11 @@ struct AttachmentTile: View {
         }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { NSWorkspace.shared.open(attachment.url) }
-        .help("点击打开：\(attachment.originalName)")
+        .onTapGesture(perform: onPreview)
+        .help("点击快速查看：\(attachment.originalName)")
         .contextMenu {
-            Button("打开") { NSWorkspace.shared.open(attachment.url) }
+            Button("快速查看", action: onPreview)
+            Button("用默认应用打开") { NSWorkspace.shared.open(attachment.url) }
             Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([attachment.url]) }
             if attachment.isImage && !isCover {
                 Button("设为封面", action: onMakeCover)
