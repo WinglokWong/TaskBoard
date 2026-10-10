@@ -1,6 +1,5 @@
 import Foundation
 import UniformTypeIdentifiers
-import CoreTransferable
 
 // 数据模型说明：
 // 所有模型都使用容错解码（见文件末尾的 Decodable 扩展）。新增字段时务必在解码扩展里给出默认值，
@@ -202,26 +201,5 @@ extension Board {
                 BoardColumn(name: String(localized: "已完成")),
             ]
         )
-    }
-}
-
-extension UTType {
-    // 应用内拖拽专用类型（在 Info.plist 的 UTExportedTypeDeclarations 中声明）。
-    // 卡片和列表分开，这样拖动经过时就能知道拖的是什么，从而显示正确的放置提示。
-    static let taskBoardCard = UTType(exportedAs: "local.taskboard.card")
-    static let taskBoardColumn = UTType(exportedAs: "local.taskboard.column")
-}
-
-struct CardDragItem: Codable, Transferable {
-    let id: UUID
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .taskBoardCard)
-    }
-}
-
-struct ColumnDragItem: Codable, Transferable {
-    let id: UUID
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .taskBoardColumn)
     }
 }

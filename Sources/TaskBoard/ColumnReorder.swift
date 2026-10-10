@@ -2,10 +2,7 @@ import SwiftUI
 import AppKit
 import Observation
 
-/// 列表拖动排序。
-///
-/// 拖动整个列表时，其他列表会实时让位，预览放下后的顺序；松开鼠标后按预览顺序保存（一个撤销步骤）。
-/// 拖到看板以外松开或按 Esc 取消时，列表回到原来的位置。
+/// 列表拖动的预览顺序：拖动整个列表时，其他列表实时让位
 @Observable
 final class ColumnReorder {
     /// 正在拖动的列表
@@ -13,15 +10,17 @@ final class ColumnReorder {
     /// 预览中的顺序；为 nil 时按看板实际顺序显示
     private(set) var previewOrder: [UUID]?
 
+    /// 列表在看板坐标空间中的位置（不触发界面刷新）
+    @ObservationIgnored var frames: [UUID: CGRect] = [:]
     @ObservationIgnored var animation: Animation? = Motion.move
-    @ObservationIgnored private let watcher = DragReleaseWatcher()
+    @ObservationIgnored private var originalOrder: [UUID] = []
 
     var isDragging: Bool { draggingID != nil }
 
     func begin(_ id: UUID, order: [UUID]) {
         draggingID = id
         previewOrder = order
-        watcher.start { [weak self] in self?.cancel() }
+        originalOrder = order
     }
 
     /// 鼠标经过第 `slot` 个列表的位置
@@ -34,92 +33,100 @@ final class ColumnReorder {
         withAnimation(animation) { previewOrder = order }
     }
 
-    /// 放下：保存预览中的顺序并结束拖动。
-    ///
-    /// 预览时列表已经移动到位，所以放下时不能再有任何动画：先保存实际顺序（与预览一致，画面不变），
-    /// 再清除预览，整个过程关闭动画。如果先清除预览，可能会有一帧显示旧顺序，随后再播放一次交换动画。
+    /// 取消：恢复原来的顺序
+    func revert() {
+        guard isDragging else { return }
+        withAnimation(animation) { previewOrder = originalOrder }
+    }
+
+    /// 保存预览顺序（在浮动副本落下之后调用）
     func commit(_ save: ([UUID]) -> Void) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            if let order = previewOrder { save(order) }
-            finish(animated: false)
-        }
+        if let order = previewOrder, order != originalOrder { save(order) }
+        finish()
     }
 
-    func cancel() {
-        finish(animated: true)
-    }
-
-    private func finish(animated: Bool) {
-        watcher.stop()
-        withAnimation(animated ? animation : nil) {
-            draggingID = nil
-            previewOrder = nil
-        }
+    func finish() {
+        draggingID = nil
+        previewOrder = nil
+        originalOrder = []
     }
 }
 
-/// 拖动列表期间覆盖整个看板的放置区域，根据鼠标的横向位置计算目标位置
-struct ColumnReorderDropDelegate: DropDelegate {
-    let reorder: ColumnReorder
-    /// 列表宽度 + 间距
-    let slotWidth: CGFloat
-    /// 第一个列表左侧的留白
-    let leadingInset: CGFloat
-    let onCommit: ([UUID]) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.taskBoardColumn])
-    }
-
-    func dropEntered(info: DropInfo) { update(info) }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        update(info)
-        return DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        // 不再根据落点重新计算：放下的位置就是用户最后看到的预览位置
-        reorder.commit(onCommit)
-        return true
-    }
-
-    private func update(_ info: DropInfo) {
-        reorder.hover(slot: Int(((info.location.x - leadingInset) / slotWidth).rounded(.down)))
-    }
-}
-
-/// 拖动列表时跟随鼠标的预览
-struct ColumnDragPreview: View {
+/// 拖动列表时跟随鼠标的预览：列表本来的样子（标题、卡片、底部），不倾斜
+struct ColumnFace: View {
     let column: BoardColumn
-    let cardCount: Int
+    let cards: [Card]
+    let boardLabels: [CardLabel]
+    /// 很长的列表在预览中截断，底部渐隐
+    var maxHeight: CGFloat = 600
+
+    private var foreground: Color { column.color?.foreground ?? .primary }
+
+    private var background: AnyShapeStyle {
+        if let color = column.color { return AnyShapeStyle(color.color) }
+        return AnyShapeStyle(Color(nsColor: .windowBackgroundColor).opacity(0.94))
+    }
 
     var body: some View {
-        let foreground = column.color?.foreground ?? .primary
-        HStack(spacing: 8) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(foreground.opacity(0.6))
-            Text(column.name)
-                .font(.headline)
-                .foregroundStyle(foreground)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text("\(cardCount)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(foreground.opacity(0.6))
+        // 能完整放下就显示整个列表；放不下时截断到最大高度，底部渐隐
+        ViewThatFits(in: .vertical) {
+            content
+            content
+                .frame(height: maxHeight, alignment: .top)
+                .clipped()
+                .mask {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 56)
+                    }
+                }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(width: 272)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(column.color.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)))
-        )
-        .rotationEffect(.degrees(-2))
-        .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
-        .padding(12)
+        .frame(maxHeight: maxHeight)
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 与 ColumnView 的标题行一致
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(foreground.opacity(0.7))
+                    .frame(width: 14, height: 20)
+                Text(column.name)
+                    .font(.headline)
+                    .foregroundStyle(foreground)
+                    .lineLimit(1)
+                Text("\(cards.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(foreground.opacity(0.6))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(foreground.opacity(0.1)))
+                Spacer(minLength: 4)
+                Image(systemName: "paintpalette").foregroundStyle(foreground.opacity(0.75))
+                Image(systemName: "ellipsis").foregroundStyle(foreground.opacity(0.75))
+            }
+            .padding(.horizontal, 4)
+            .frame(minHeight: 24)
+
+            VStack(spacing: 8) {
+                ForEach(cards) { card in
+                    CardFace(card: card, labels: boardLabels.filter { card.labelIDs.contains($0.id) })
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
+
+            Label("添加卡片", systemImage: "plus")
+                .foregroundStyle(foreground.opacity(0.8))
+                .padding(.vertical, 6)
+                .padding(.horizontal, 6)
+        }
+        .padding(10)
+        .frame(width: 272, alignment: .top)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(RoundedRectangle(cornerRadius: 12).fill(background))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

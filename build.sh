@@ -68,16 +68,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>UTExportedTypeDeclarations</key>
     <array>
         <dict>
-            <key>UTTypeIdentifier</key><string>local.taskboard.card</string>
-            <key>UTTypeDescription</key><string>TaskBoard Card</string>
-            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
-        </dict>
-        <dict>
-            <key>UTTypeIdentifier</key><string>local.taskboard.column</string>
-            <key>UTTypeDescription</key><string>TaskBoard List</string>
-            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
-        </dict>
-        <dict>
             <key>UTTypeIdentifier</key><string>local.taskboard.archive</string>
             <key>UTTypeDescription</key><string>TaskBoard Export</string>
             <key>UTTypeConformsTo</key><array><string>public.data</string></array>

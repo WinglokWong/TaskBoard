@@ -23,6 +23,7 @@ struct BoardView: View {
     @State private var keyMonitor = KeyMonitor()
     @State private var columnReorder = ColumnReorder()
     @State private var cardReorder = CardReorder()
+    @State private var drag = BoardDrag()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -45,7 +46,7 @@ struct BoardView: View {
                         HStack(alignment: .top, spacing: 12) {
                             let columns = displayedColumns(board)
                             ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
-                                let cards = arrangedCards(board, in: column.id)
+                                let cards = visibleCards(board, in: column.id)
                                 let isDragged = columnReorder.draggingID == column.id
                                 ColumnView(
                                     boardID: boardID,
@@ -55,14 +56,16 @@ struct BoardView: View {
                                     isLast: index == columns.count - 1,
                                     boardLabels: board.labels,
                                     columns: board.columns,
-                                    selectedCardID: selectedCardID,
+                                    selectedCardID: drag.isActive ? nil : selectedCardID,
                                     draggingCardID: cardReorder.draggingID,
                                     isCardDropTarget: cardReorder.target?.columnID == column.id,
+                                    placeholder: cardPlaceholder(board, in: column.id),
                                     addRequest: $addRequest,
-                                    onOpen: { editingCard = CardRef(id: $0.id) },
-                                    onHoverCard: { id, inside in if inside { selectedCardID = id } },
-                                    onBeginCardDrag: { beginCardDrag($0) },
-                                    onCardFrame: { id, frame in cardReorder.frames[id] = frame }
+                                    // 拖动或落位过程中的松开不算点击
+                                    onOpen: { card in if !drag.isActive { editingCard = CardRef(id: card.id) } },
+                                    onHoverCard: { id, inside in if inside && !drag.isActive { selectedCardID = id } },
+                                    onCardFrame: { id, frame in cardReorder.frames[id] = frame },
+                                    onPlaceholderFrame: { cardReorder.placeholderFrames[column.id] = $0 }
                                 )
                                 .transition(Motion.cardTransition(reduceMotion))
                                 // 被拖动的列表留在预览位置，显示为半透明占位
@@ -73,16 +76,12 @@ struct BoardView: View {
                                             .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
                                     }
                                 }
-                                // 拖动整个列表（从卡片上开始拖动时拖的是卡片）
-                                .onDrag {
-                                    columnReorder.animation = Motion.move(reduceMotion)
-                                    columnReorder.begin(column.id, order: board.columns.map(\.id))
-                                    let provider = NSItemProvider()
-                                    provider.register(ColumnDragItem(id: column.id))
-                                    return provider
-                                } preview: {
-                                    ColumnDragPreview(column: column, cardCount: cards.count)
-                                }
+                                .background(GeometryReader { g in
+                                    let frame = g.frame(in: .named(BoardSpace.name))
+                                    Color.clear
+                                        .onAppear { columnReorder.frames[column.id] = frame }
+                                        .onChange(of: frame) { _, newFrame in columnReorder.frames[column.id] = newFrame }
+                                })
                             }
                             AddColumnView(boardID: boardID, background: board.background)
                         }
@@ -90,37 +89,22 @@ struct BoardView: View {
                         .animation(Motion.move(reduceMotion), value: board.columns.map(\.id))
                         .padding(16)
                         .frame(maxHeight: .infinity, alignment: .top)
+                        // 看板级拖动手势：挂在不会移动的视图上，卡片换到其他列表时拖动也不会中断。
+                        // 开始时根据卡片 / 列表的位置判断拖的是什么（卡片优先于所在列表）。
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 4, coordinateSpace: .named(BoardSpace.name))
+                                .onChanged(boardDragChanged)
+                                .onEnded(boardDragEnded)
+                        )
                         .coordinateSpace(name: BoardSpace.name)
-                        .overlay {
-                            // 拖动卡片期间同理：由一个放置区域统一计算目标列表和位置
-                            if cardReorder.isDragging {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onDrop(of: [.taskBoardCard], delegate: CardReorderDropDelegate(
-                                        reorder: cardReorder,
-                                        columnIDs: displayedColumns(board).map(\.id),
-                                        cardIDs: { columnID in
-                                            guard let board = store.board(boardID) else { return [] }
-                                            return arrangedCards(board, in: columnID).map(\.id)
-                                        },
-                                        slotWidth: 272 + 12,
-                                        leadingInset: 16,
-                                        onCommit: commitCardDrop
-                                    ))
-                            }
-                        }
-                        .overlay {
-                            // 拖动列表期间，用一个覆盖整个看板的放置区域接管，避免被卡片的放置区域拦截
-                            if columnReorder.isDragging {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onDrop(of: [.taskBoardColumn], delegate: ColumnReorderDropDelegate(
-                                        reorder: columnReorder,
-                                        slotWidth: 272 + 12,
-                                        leadingInset: 16,
-                                        onCommit: { store.reorderColumns($0, in: boardID) }
-                                    ))
-                            }
+                        // 拖动中的浮动副本（与原物外观相同），画在所有列表之上
+                        .overlay(alignment: .topLeading) {
+                            BoardDragOverlay(
+                                drag: drag,
+                                board: board,
+                                cardsInColumn: { visibleCards(board, in: $0) },
+                                reduceMotion: reduceMotion
+                            )
                         }
                     }
                     .onChange(of: scrollTarget) { _, target in
@@ -279,13 +263,119 @@ struct BoardView: View {
             .background(Capsule().fill(Color.secondary.opacity(0.15)))
     }
 
-    // MARK: - 卡片拖动
+    // MARK: - 拖动（卡片和列表）
 
-    private func beginCardDrag(_ card: Card) {
-        guard let board = store.board(boardID), let columnID = card.columnID else { return }
-        let index = visibleCards(board, in: columnID).firstIndex(where: { $0.id == card.id }) ?? 0
-        cardReorder.animation = Motion.move(reduceMotion)
-        cardReorder.begin(card.id, at: CardDropTarget(columnID: columnID, index: index))
+    private func boardDragChanged(_ value: DragGesture.Value) {
+        guard let board = store.board(boardID) else { return }
+        if !drag.isActive {
+            // 正在输入文字时（例如在文本框中拖选）不开始拖动
+            guard !(NSApp.keyWindow?.firstResponder is NSText),
+                  let (item, frame) = dragItem(at: value.startLocation, in: board) else { return }
+            // 开始时原物换成占位（位置不变），这一步不需要动画
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            var started = true
+            withTransaction(transaction) {
+                switch item {
+                case .card(let id):
+                    guard let card = board.cards.first(where: { $0.id == id }), let columnID = card.columnID else {
+                        started = false
+                        return
+                    }
+                    let index = visibleCards(board, in: columnID).firstIndex(where: { $0.id == id }) ?? 0
+                    cardReorder.animation = Motion.move(reduceMotion)
+                    cardReorder.begin(id, at: CardDropTarget(columnID: columnID, index: index))
+                case .column(let id):
+                    columnReorder.animation = Motion.move(reduceMotion)
+                    columnReorder.begin(id, order: board.columns.map(\.id))
+                }
+            }
+            guard started else { return }
+            drag.begin(item, frame: frame, pointer: value.startLocation, liftAnimation: Motion.quick)
+        }
+        guard let item = drag.item, !drag.isLanding, !drag.cancelled else { return }
+        drag.move(to: value.location)
+        switch item {
+        case .card:
+            let target = cardReorder.target(
+                at: value.location,
+                columnIDs: displayedColumns(board).map(\.id),
+                cardIDs: { visibleCards(board, in: $0).map(\.id) }
+            )
+            if let target { cardReorder.hover(target) }
+        case .column:
+            columnReorder.hover(slot: BoardSpace.slot(atX: value.location.x))
+        }
+    }
+
+    private func boardDragEnded(_ value: DragGesture.Value) {
+        guard let item = drag.item, !drag.isLanding else { return }
+        if drag.cancelled || isOutsideBoard(value.location) {
+            cancelDrag()
+            return
+        }
+        // 等最后一次预览位置的布局完成，再让副本滑入占位的位置
+        DispatchQueue.main.async {
+            switch item {
+            case .card:
+                landCard()
+            case .column(let id):
+                let slot = columnReorder.frames[id] ?? drag.originFrame
+                drag.land(at: slot, animation: Motion.settle(reduceMotion)) {
+                    columnReorder.commit { store.reorderColumns($0, in: boardID) }
+                }
+            }
+        }
+    }
+
+    /// 让卡片副本滑入目标列表中占位的位置。
+    /// 如果目标列表的占位还没完成布局（松手太快），最多再等几帧；仍然没有就原地落下，绝不飞回原来的位置。
+    private func landCard(attempt: Int = 0) {
+        guard drag.isActive, !drag.isLanding else { return }
+        if let slot = cardReorder.placeholderFrame {
+            drag.land(at: slot, animation: Motion.settle(reduceMotion)) {
+                cardReorder.commit(commitCardDrop)
+            }
+        } else if attempt < 3 {
+            DispatchQueue.main.async { landCard(attempt: attempt + 1) }
+        } else {
+            drag.land(at: drag.frame, animation: Motion.settle(reduceMotion)) {
+                cardReorder.commit(commitCardDrop)
+            }
+        }
+    }
+
+    /// 鼠标下的卡片或列表（卡片优先）及其位置
+    private func dragItem(at point: CGPoint, in board: Board) -> (BoardDrag.Item, CGRect)? {
+        let columns = displayedColumns(board)
+        for column in columns {
+            for card in visibleCards(board, in: column.id) {
+                if let frame = cardReorder.frames[card.id], frame.contains(point) { return (.card(card.id), frame) }
+            }
+        }
+        for column in columns {
+            if let frame = columnReorder.frames[column.id], frame.contains(point) { return (.column(column.id), frame) }
+        }
+        return nil
+    }
+
+    /// 取消拖动（Esc 或拖到看板外松开）：占位回到原处，副本滑回原来的位置
+    private func cancelDrag() {
+        guard let item = drag.item, !drag.isLanding else { return }
+        drag.markCancelled()
+        switch item {
+        case .card:
+            cardReorder.revert()
+            drag.land(at: drag.originFrame, animation: Motion.settle(reduceMotion)) { cardReorder.finish() }
+        case .column:
+            columnReorder.revert()
+            drag.land(at: drag.originFrame, animation: Motion.settle(reduceMotion)) { columnReorder.finish() }
+        }
+    }
+
+    /// 拖到侧边栏或工具栏上松开视为取消
+    private func isOutsideBoard(_ point: CGPoint) -> Bool {
+        point.x < -8 || point.y < -8
     }
 
     private func commitCardDrop(_ cardID: UUID, _ target: CardDropTarget) {
@@ -295,16 +385,11 @@ struct BoardView: View {
         store.moveCard(cardID, in: boardID, to: target.columnID, before: before)
     }
 
-    /// 拖动卡片时按预览位置排列：被拖动的卡片从原列表移出，放到目标列表的预览位置
-    private func arrangedCards(_ board: Board, in columnID: UUID) -> [Card] {
-        var cards = visibleCards(board, in: columnID)
-        guard let id = cardReorder.draggingID, let target = cardReorder.target,
-              let dragged = board.cards.first(where: { $0.id == id }) else { return cards }
-        cards.removeAll { $0.id == id }
-        if target.columnID == columnID {
-            cards.insert(dragged, at: min(target.index, cards.count))
-        }
-        return cards
+    /// 拖动卡片时，目标列表中的预览占位
+    private func cardPlaceholder(_ board: Board, in columnID: UUID) -> CardPlaceholder? {
+        guard let id = cardReorder.draggingID, let target = cardReorder.target, target.columnID == columnID,
+              let card = board.cards.first(where: { $0.id == id }) else { return nil }
+        return CardPlaceholder(card: card, index: target.index)
     }
 
     /// 拖动列表时按预览顺序显示
@@ -329,6 +414,10 @@ struct BoardView: View {
     // MARK: - 键盘
 
     private func handleKey(_ key: BoardKey) -> Bool {
+        if drag.isActive {
+            if key == .escape { cancelDrag() }
+            return true
+        }
         guard editingCard == nil, !showArchive, previewURL == nil, let board = store.board(boardID) else { return false }
         let grid = board.columns.map { visibleCards(board, in: $0.id) }
         let position: (col: Int, row: Int)? = selectedCardID.flatMap { id in

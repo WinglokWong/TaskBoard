@@ -10,11 +10,11 @@ The interface is available in **English**, **Simplified Chinese** (任务看板)
 - **Custom lists**:
   - A new board starts with To Do / In Progress / Done.
   - Add, delete and rename lists (double-click the title).
-  - Reorder lists by dragging a whole list (anywhere except on a card). The other lists slide aside to preview the new order, and releasing places the list there. Dropping outside the board or pressing Esc cancels.
+  - Reorder lists by dragging a whole list (anywhere except on a card). An exact copy of the list follows the pointer while the other lists slide aside to preview the new order. On release, the copy glides into place. Releasing over the sidebar or toolbar, or pressing Esc, sends it back.
 - **Cards**:
   - Each card has a title, a description and attachments.
   - Mark a card done with one click; it gets a check and a strikethrough.
-  - Drag cards to reorder them or move them between lists. The card moves into place as you drag, the other cards make room, and releasing leaves it exactly where the preview showed. Dropping outside the board or pressing Esc cancels.
+  - Drag cards to reorder them or move them between lists. An exact copy of the card follows the pointer, a faded placeholder shows where it will land, and the other cards make room. On release, the copy glides into the placeholder's spot. Releasing over the sidebar or toolbar, or pressing Esc, sends it back.
   - Right-click a card for quick actions: color, move, archive, delete.
 - **Attachments**:
   - Add files with the file picker, drag and drop, or paste an image from the clipboard.
@@ -62,7 +62,7 @@ The interface is available in **English**, **Simplified Chinese** (任务看板)
 - **Search**: find cards by title, description or checklist items from the toolbar.
 - **Smooth motion**:
   - Cards and lists animate when they move, appear or disappear, and switching boards cross-fades.
-  - While dragging, the other cards or lists slide aside to preview the result.
+  - Dragging is drawn by the app itself rather than the system drag image, so what you drag looks exactly like the card or list and lands without a second animation.
   - With **Reduce Motion** turned on, movement is replaced by simple fades.
 - **Three languages**:
   - English, Simplified Chinese and Traditional Chinese, including dates, reminders and the app name.
