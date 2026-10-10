@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>TaskBoard</title>
+    <link>https://github.com/WinglokWong/TaskBoard</link>
+    <description>TaskBoard updates</description>
+    <language>zh-cn</language>
+    <item>
+      <title>Version 1.3.0</title>
+      <pubDate>Sat, 10 Oct 2026 04:48:54 GMT</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/WinglokWong/TaskBoard/releases/tag/v1.3.0</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h2 dir="auto">What's new</h2>
+<ul dir="auto">
+<li><strong>Automatic updates</strong>: TaskBoard now updates itself.
+<ul dir="auto">
+<li>It checks for new versions daily; you can also use <strong>任务看板 → 检查更新…</strong>.</li>
+<li>Updates are signed, and the app verifies each one before installing.</li>
+</ul>
+</li>
+<li><strong>Reorder lists by dragging</strong>: grab the ≡ handle or the list title and drop it before or after another list. A blue bar shows where it will land.</li>
+<li><strong>Markdown descriptions</strong>:
+<ul dir="auto">
+<li>Card descriptions render headings, lists, task lists, <strong>bold</strong>, <em>italic</em>, <code class="notranslate">code</code>, links, quotes and code blocks.</li>
+<li>Double-click the description, or click <strong>编辑</strong>, to edit it.</li>
+</ul>
+</li>
+<li><strong>Auto-archive</strong>: in a board's gear menu (看板设置), done cards can archive themselves 1, 3, 7 or 30 days after completion.</li>
+<li><strong>Smoother interface</strong>:
+<ul dir="auto">
+<li>Cards and lists animate as they move, appear and disappear.</li>
+<li>Drop targets open up space while you drag, and cards lift slightly on hover.</li>
+<li>With Reduce Motion turned on, movement is replaced by simple fades.</li>
+</ul>
+</li>
+<li><strong>Faster boards</strong>: images load in the background, and only cards that actually changed are redrawn.</li>
+</ul>
+<h2 dir="auto">Upgrading</h2>
+<p dir="auto">This is the first version with the built-in updater. If you're on 1.2.0 or earlier, install it manually once: replace the app in Applications. Later versions will arrive inside the app.</p>
+<p dir="auto">Your data upgrades automatically, and auto-archive stays off until you turn it on.</p>
+<h2 dir="auto">Install</h2>
+<ol dir="auto">
+<li>Download <strong>TaskBoard-1.3.0.dmg</strong> below, open it, and drag <strong>任务看板</strong> into <strong>Applications</strong>.</li>
+<li>The app isn't notarized by Apple, so the first launch is blocked. To allow it:
+<ul dir="auto">
+<li>Go to <strong>System Settings → Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>.</li>
+<li>Alternatively, run this in Terminal:
+<pre class="notranslate"><code class="notranslate">xattr -dr com.apple.quarantine "/Applications/任务看板.app"
+</code></pre>
+</li>
+</ul>
+</li>
+</ol>
+<p dir="auto"><strong>Requirements:</strong> macOS 14 Sonoma or later. The DMG is a universal build for Apple Silicon and Intel Macs.</p>]]></description>
+      <enclosure url="https://github.com/WinglokWong/TaskBoard/releases/download/v1.3.0/TaskBoard-1.3.0.dmg" sparkle:edSignature="3/y5z7snq8VXtfC3mHwZtxIzuCSB8MAiL8DMY98vjYgUUsFpcIGy7yhHuPZlcK4xiAQEtaUkpLKctyfuSkdyDQ==" length="3251913" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
