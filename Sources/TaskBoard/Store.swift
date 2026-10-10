@@ -28,6 +28,13 @@ final class Store {
     var showingUpcoming = false
     var openRequest: CardOpenRequest?
 
+    /// 等待导入的文件（来自“导入…”菜单或在 Finder 中双击 .taskboard 文件）
+    var pendingImportURL: URL?
+    /// 已读取、等待用户确认的导入内容
+    var importCandidate: ImportedArchive?
+    /// 导入 / 导出完成或失败时显示的提示
+    var transferAlert: TransferAlert?
+
     /// 由主窗口注入，用于撤销 / 重做
     @ObservationIgnored weak var undoManager: UndoManager?
 
@@ -56,7 +63,11 @@ final class Store {
     static var dataURL: URL { rootURL.appendingPathComponent("data.json") }
 
     /// 最多保留的备份数量
-    static let maxBackups = 30
+    /// 最多保留的备份数量（可在设置中修改）
+    static var maxBackups: Int {
+        let value = UserDefaults.standard.integer(forKey: SettingsKey.maxBackups)
+        return value > 0 ? value : 30
+    }
 
     init() {
         if let raw = try? Data(contentsOf: Self.dataURL) {
@@ -68,7 +79,7 @@ final class Store {
                 let copy = Self.backupsURL.appendingPathComponent("data-\(Self.stamp(Date()))-unreadable.json")
                 try? FileManager.default.copyItem(at: Self.dataURL, to: copy)
                 data = .sample
-                startupMessage = "数据文件无法读取，已创建新的示例看板。原文件已保存为备份「\(copy.lastPathComponent)」，可以在“文件 → 从备份恢复”中查看。"
+                startupMessage = String(localized: "数据文件无法读取，已创建新的示例看板。原文件已保存为备份「\(copy.lastPathComponent)」，可以在“文件 → 从备份恢复”中查看。")
             }
         } else {
             data = .sample
@@ -228,8 +239,9 @@ final class Store {
 
     /// 在修改数据前调用，记录当前状态以便撤销。
     /// `coalesce` 为 true 时，短时间内相同名称的连续操作（如拖动取色器）只记录一次。
-    private func checkpoint(_ name: String, coalesce: Bool = false) {
+    private func checkpoint(_ resource: LocalizedStringResource, coalesce: Bool = false) {
         guard let um = undoManager, !um.isUndoing, !um.isRedoing else { return }
+        let name = String(localized: resource)
         let now = Date()
         if coalesce, let last = lastCheckpoint, last.name == name, now.timeIntervalSince(last.date) < 1.5 {
             lastCheckpoint = (name, now)
@@ -257,7 +269,7 @@ final class Store {
            let ci = before.boards[bi].cards.firstIndex(where: { $0.id == original.id }) {
             before.boards[bi].cards[ci] = original
         }
-        registerUndo(restoring: before, name: "编辑卡片", on: um)
+        registerUndo(restoring: before, name: String(localized: "编辑卡片"), on: um)
         lastCheckpoint = nil
     }
 
@@ -311,7 +323,7 @@ final class Store {
     @discardableResult
     func addBoard() -> UUID {
         checkpoint("新建看板")
-        var board = Board.makeDefault(name: "新看板")
+        var board = Board.makeDefault(name: String(localized: "新看板"))
         board.background = Palette.presets.filter { $0.value.luminance < 0.6 }.randomElement()?.value ?? board.background
         data.boards.append(board)
         data.selectedBoardID = board.id
@@ -372,18 +384,14 @@ final class Store {
         }
     }
 
-    /// 拖拽排序：把列表移动到 `targetID` 的前面或后面
-    func moveColumn(_ columnID: UUID, in boardID: UUID, to targetID: UUID, after: Bool) {
-        guard columnID != targetID else { return }
+    /// 拖拽排序完成：按给定顺序排列列表（作为一个撤销步骤）
+    func reorderColumns(_ order: [UUID], in boardID: UUID) {
+        guard let board = board(boardID), board.columns.map(\.id) != order,
+              Set(order) == Set(board.columns.map(\.id)) else { return }
         checkpoint("移动列表")
         update(boardID) { b in
-            guard let from = b.columns.firstIndex(where: { $0.id == columnID }) else { return }
-            let column = b.columns.remove(at: from)
-            guard let target = b.columns.firstIndex(where: { $0.id == targetID }) else {
-                b.columns.insert(column, at: from)
-                return
-            }
-            b.columns.insert(column, at: after ? target + 1 : target)
+            let byID = Dictionary(uniqueKeysWithValues: b.columns.map { ($0.id, $0) })
+            b.columns = order.compactMap { byID[$0] }
         }
     }
 
@@ -460,7 +468,7 @@ final class Store {
             guard let i = b.cards.firstIndex(where: { $0.id == cardID }) else { return }
             var card = b.cards.remove(at: i)
             if !b.columns.contains(where: { $0.id == card.columnID }) {
-                if b.columns.isEmpty { b.columns.append(BoardColumn(name: "待办")) }
+                if b.columns.isEmpty { b.columns.append(BoardColumn(name: String(localized: "待办"))) }
                 card.columnID = b.columns[0].id
             }
             card.isArchived = false
@@ -568,9 +576,186 @@ final class Store {
             try png.write(to: Self.attachmentsURL.appendingPathComponent(stored))
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd-HHmmss"
-            return Attachment(fileName: stored, originalName: "粘贴的图片 \(formatter.string(from: Date())).png")
+            let name = String(localized: "粘贴的图片 \(formatter.string(from: Date()))", comment: "粘贴图片时生成的附件文件名（不含扩展名）")
+            return Attachment(fileName: stored, originalName: name + ".png")
         } catch {
             return nil
         }
     }
+
+    // MARK: - 导入 / 导出
+
+    /// 读取待导入的文件，成功后等待用户确认
+    func prepareImport(_ url: URL) {
+        pendingImportURL = nil
+        importCandidate?.discard()
+        do {
+            importCandidate = try ArchiveIO.read(url)
+        } catch {
+            transferAlert = TransferAlert(title: String(localized: "无法导入"), message: error.localizedDescription)
+        }
+    }
+
+    func cancelImport() {
+        importCandidate?.discard()
+        importCandidate = nil
+    }
+
+    /// 将导入的看板作为新看板加入（全部换新 ID，不影响现有数据）
+    func importAsNewBoards(_ archive: ImportedArchive) {
+        var summary = ImportSummary()
+        var added: [Board] = []
+        var existingNames = Set(data.boards.map(\.name))
+        for board in archive.boards {
+            var copy = board.reidentified { attachment in
+                guard let source = archive.attachmentFile(attachment.fileName) else {
+                    summary.missingAttachments += 1
+                    return nil
+                }
+                let ext = (attachment.fileName as NSString).pathExtension
+                let stored = UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)")
+                do {
+                    try FileManager.default.copyItem(at: source, to: Self.attachmentsURL.appendingPathComponent(stored))
+                } catch {
+                    summary.missingAttachments += 1
+                    return nil
+                }
+                summary.attachments += 1
+                return Attachment(fileName: stored, originalName: attachment.originalName)
+            }
+            Self.placeOrphanedCards(in: &copy)
+            if existingNames.contains(copy.name) {
+                copy.name = String(localized: "\(copy.name)（导入）")
+            }
+            existingNames.insert(copy.name)
+            summary.boards += 1
+            summary.cards += copy.cards.count
+            added.append(copy)
+        }
+        archive.discard()
+        importCandidate = nil
+        guard !added.isEmpty else { return }
+
+        saveNow()
+        Self.makeBackup(note: "before-import")
+        checkpoint("导入看板")
+        data.boards.append(contentsOf: added)
+        showingUpcoming = false
+        data.selectedBoardID = added.first?.id
+        transferAlert = TransferAlert(title: String(localized: "导入完成"), message: summary.message)
+    }
+
+    /// 用导入的全部数据替换当前数据（先自动备份，可撤销）
+    func replaceAllData(with archive: ImportedArchive) {
+        guard var library = archive.library else { return }
+        var summary = ImportSummary()
+        for bi in library.boards.indices {
+            for ci in library.boards[bi].cards.indices {
+                library.boards[bi].cards[ci].attachments = library.boards[bi].cards[ci].attachments.filter { attachment in
+                    // 先校验文件名，再访问文件系统，防止 "../" 之类的路径指向附件目录之外
+                    guard ArchiveIO.isSafeFileName(attachment.fileName) else {
+                        summary.missingAttachments += 1
+                        return false
+                    }
+                    let target = attachment.url
+                    if FileManager.default.fileExists(atPath: target.path) {
+                        summary.attachments += 1
+                        return true
+                    }
+                    guard let source = archive.attachmentFile(attachment.fileName),
+                          (try? FileManager.default.copyItem(at: source, to: target)) != nil else {
+                        summary.missingAttachments += 1
+                        return false
+                    }
+                    summary.attachments += 1
+                    return true
+                }
+            }
+            Self.placeOrphanedCards(in: &library.boards[bi])
+        }
+        summary.boards = library.boards.count
+        summary.cards = library.boards.reduce(0) { $0 + $1.cards.count }
+        archive.discard()
+        importCandidate = nil
+
+        saveNow()
+        Self.makeBackup(note: "before-import")
+        checkpoint("替换全部数据")
+        library.schemaVersion = AppData.currentSchemaVersion
+        if !library.boards.contains(where: { $0.id == library.selectedBoardID }) {
+            library.selectedBoardID = library.boards.first?.id
+        }
+        data = library
+        showingUpcoming = false
+        transferAlert = TransferAlert(title: String(localized: "导入完成"), message: summary.message)
+    }
+
+    /// 没有所属列表的未归档卡片放进第一个列表，避免“看不见”
+    private static func placeOrphanedCards(in board: inout Board) {
+        let columnIDs = Set(board.columns.map(\.id))
+        let orphaned = board.cards.indices.filter { i in
+            !board.cards[i].isArchived && !columnIDs.contains(board.cards[i].columnID ?? UUID())
+        }
+        guard !orphaned.isEmpty else { return }
+        if board.columns.isEmpty { board.columns.append(BoardColumn(name: String(localized: "待办"))) }
+        for i in orphaned { board.cards[i].columnID = board.columns[0].id }
+    }
+
+    func exportBoard(_ boardID: UUID) {
+        guard let board = board(boardID) else { return }
+        let name = board.name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        guard let url = Self.askSaveLocation(defaultName: name) else { return }
+        runExport(to: url) { try ArchiveIO.export(board: board, to: url) }
+    }
+
+    func exportAllData() {
+        let date = Date().formatted(.iso8601.year().month().day())
+        guard let url = Self.askSaveLocation(defaultName: String(localized: "任务看板全部数据 \(date)")) else { return }
+        let snapshot = data
+        runExport(to: url) { try ArchiveIO.export(library: snapshot, to: url) }
+    }
+
+    func chooseImportFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.taskBoardArchive]
+        panel.allowsMultipleSelection = false
+        panel.message = String(localized: "选择要导入的 .taskboard 文件")
+        if panel.runModal() == .OK, let url = panel.url {
+            prepareImport(url)
+        }
+    }
+
+    private func runExport(to url: URL, _ work: @escaping () throws -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try work() }
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.transferAlert = TransferAlert(
+                        title: String(localized: "导出完成"),
+                        message: String(localized: "已保存到「\(url.lastPathComponent)」。"),
+                        revealURL: url
+                    )
+                case .failure(let error):
+                    self.transferAlert = TransferAlert(title: String(localized: "导出失败"), message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private static func askSaveLocation(defaultName: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.taskBoardArchive]
+        panel.nameFieldStringValue = defaultName + ".taskboard"
+        panel.canCreateDirectories = true
+        return panel.runModal() == .OK ? panel.url : nil
+    }
 }
+
+struct TransferAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    var revealURL: URL? = nil
+}
+

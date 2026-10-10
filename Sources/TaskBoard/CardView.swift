@@ -202,9 +202,9 @@ struct DueBadge: View {
     }
 
     private func style(now: Date) -> (fill: Color, filled: Bool, help: String) {
-        if isDone { return (.green, true, "已完成") }
-        if date < now { return (.red, true, "已过期") }
-        if date.timeIntervalSince(now) < 24 * 3600 { return (.orange, true, "即将到期") }
-        return (.clear, false, "截止日期")
+        if isDone { return (.green, true, String(localized: "已完成")) }
+        if date < now { return (.red, true, String(localized: "已过期")) }
+        if date.timeIntervalSince(now) < 24 * 3600 { return (.orange, true, String(localized: "即将到期")) }
+        return (.clear, false, String(localized: "截止日期"))
     }
 }

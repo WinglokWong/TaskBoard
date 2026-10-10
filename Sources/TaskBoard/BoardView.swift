@@ -21,6 +21,7 @@ struct BoardView: View {
     @State private var previewURL: URL?
     @State private var previewURLs: [URL] = []
     @State private var keyMonitor = KeyMonitor()
+    @State private var columnReorder = ColumnReorder()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -41,13 +42,16 @@ struct BoardView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal) {
                         HStack(alignment: .top, spacing: 12) {
-                            ForEach(Array(board.columns.enumerated()), id: \.element.id) { index, column in
+                            let columns = displayedColumns(board)
+                            ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
+                                let cards = visibleCards(board, in: column.id)
+                                let isDragged = columnReorder.draggingID == column.id
                                 ColumnView(
                                     boardID: boardID,
                                     column: column,
-                                    cards: visibleCards(board, in: column.id),
+                                    cards: cards,
                                     isFirst: index == 0,
-                                    isLast: index == board.columns.count - 1,
+                                    isLast: index == columns.count - 1,
                                     boardLabels: board.labels,
                                     columns: board.columns,
                                     selectedCardID: selectedCardID,
@@ -55,6 +59,24 @@ struct BoardView: View {
                                     onOpen: { editingCard = CardRef(id: $0.id) },
                                     onHoverCard: { id, inside in if inside { selectedCardID = id } }
                                 )
+                                // 被拖动的列表留在预览位置，显示为半透明占位
+                                .opacity(isDragged ? 0.35 : 1)
+                                .overlay {
+                                    if isDragged {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                                    }
+                                }
+                                // 拖动整个列表（从卡片上开始拖动时拖的是卡片）
+                                .onDrag {
+                                    columnReorder.animation = Motion.move(reduceMotion)
+                                    columnReorder.begin(column.id, order: board.columns.map(\.id))
+                                    let provider = NSItemProvider()
+                                    provider.register(ColumnDragItem(id: column.id))
+                                    return provider
+                                } preview: {
+                                    ColumnDragPreview(column: column, cardCount: cards.count)
+                                }
                             }
                             AddColumnView(boardID: boardID, background: board.background)
                         }
@@ -62,6 +84,19 @@ struct BoardView: View {
                         .animation(Motion.move(reduceMotion), value: board.columns.map(\.id))
                         .padding(16)
                         .frame(maxHeight: .infinity, alignment: .top)
+                        .overlay {
+                            // 拖动列表期间，用一个覆盖整个看板的放置区域接管，避免被卡片的放置区域拦截
+                            if columnReorder.isDragging {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onDrop(of: [.taskBoardColumn], delegate: ColumnReorderDropDelegate(
+                                        reorder: columnReorder,
+                                        slotWidth: 272 + 12,
+                                        leadingInset: 16,
+                                        onCommit: { store.reorderColumns($0, in: boardID) }
+                                    ))
+                            }
+                        }
                     }
                     .onChange(of: scrollTarget) { _, target in
                         guard let target else { return }
@@ -176,6 +211,8 @@ struct BoardView: View {
                 ForEach(AutoArchiveOption.all) { Text($0.title).tag($0.days) }
             }
             .pickerStyle(.inline)
+            Divider()
+            Button("导出看板…") { store.exportBoard(boardID) }
         } label: {
             Label("看板设置", systemImage: board.autoArchiveDays == nil ? "gearshape" : "gearshape.fill")
         }
@@ -193,7 +230,7 @@ struct BoardView: View {
             ForEach(selectedLabels) { LabelPill(label: $0) }
             if filter.status != .all { chip(filter.status.title) }
             if filter.due != .any { chip(filter.due.title) }
-            if !trimmedSearch.isEmpty { chip("搜索：\(trimmedSearch)") }
+            if !trimmedSearch.isEmpty { chip(String(localized: "搜索：\(trimmedSearch)")) }
             Spacer()
             Button("清除") {
                 filter = BoardFilter()
@@ -215,6 +252,15 @@ struct BoardView: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(Capsule().fill(Color.secondary.opacity(0.15)))
+    }
+
+    /// 拖动列表时按预览顺序显示
+    private func displayedColumns(_ board: Board) -> [BoardColumn] {
+        guard let order = columnReorder.previewOrder else { return board.columns }
+        let byID = Dictionary(uniqueKeysWithValues: board.columns.map { ($0.id, $0) })
+        let ordered = order.compactMap { byID[$0] }
+        // 拖动期间若有列表增删，退回实际顺序
+        return ordered.count == board.columns.count ? ordered : board.columns
     }
 
     private func visibleCards(_ board: Board, in columnID: UUID) -> [Card] {

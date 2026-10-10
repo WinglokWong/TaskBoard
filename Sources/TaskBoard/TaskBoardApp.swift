@@ -2,13 +2,31 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// 在窗口准备好之前收到的待打开文件
+    static var pendingOpenURLs: [URL] = []
+    static var openHandler: ((URL) -> Void)? {
+        didSet {
+            guard let openHandler else { return }
+            pendingOpenURLs.forEach(openHandler)
+            pendingOpenURLs.removeAll()
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = AppLanguage.atLaunch
         NotificationManager.shared.setUp()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// 在 Finder 中双击 .taskboard 文件
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.pathExtension.lowercased() == "taskboard" {
+            if let handler = Self.openHandler { handler(url) } else { Self.pendingOpenURLs.append(url) }
+        }
+    }
 }
 
 @main
@@ -21,6 +39,7 @@ struct TaskBoardApp: App {
         Window("任务看板", id: "main") {
             ContentView()
                 .environment(store)
+                .environment(\.locale, AppLocale.current)
                 .frame(minWidth: 900, minHeight: 560)
         }
         .defaultSize(width: 1280, height: 800)
@@ -39,6 +58,15 @@ struct TaskBoardApp: App {
                     NSWorkspace.shared.activateFileViewerSelecting([Store.dataURL])
                 }
                 Divider()
+                Button("导入…") { store.chooseImportFile() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+                Button("导出当前看板…") {
+                    if let id = store.data.selectedBoardID { store.exportBoard(id) }
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(store.showingUpcoming || store.board(store.data.selectedBoardID) == nil)
+                Button("导出全部数据…") { store.exportAllData() }
+                Divider()
                 Button("立即备份") { store.backupNow() }
                 Button("从备份恢复…") { store.showBackups = true }
             }
@@ -46,6 +74,12 @@ struct TaskBoardApp: App {
                 Button("键盘快捷键") { store.showShortcuts = true }
                     .keyboardShortcut("/", modifiers: .command)
             }
+        }
+
+        Settings {
+            SettingsView(updater: updater)
+                .environment(store)
+                .environment(\.locale, AppLocale.current)
         }
     }
 }
@@ -84,6 +118,7 @@ struct ContentView: View {
                         .tag(SidebarItem.board(board.id))
                         .contextMenu {
                             Button("重命名…") { beginRename(board) }
+                            Button("导出看板…") { store.exportBoard(board.id) }
                             Divider()
                             Button("删除看板…", role: .destructive) { deletingBoardID = board.id }
                         }
@@ -114,6 +149,7 @@ struct ContentView: View {
         }
         .onAppear {
             store.undoManager = undoManager
+            AppDelegate.openHandler = { [weak store] url in store?.prepareImport(url) }
             NotificationManager.shared.onOpenCard = { [weak store] boardID, cardID in
                 store?.requestOpen(cardID: cardID, in: boardID)
             }
@@ -125,6 +161,7 @@ struct ContentView: View {
         .sheet(isPresented: $store.showBackups) {
             BackupsView().environment(store)
         }
+        .modifier(TransferDialogs())
         .alert("数据读取失败", isPresented: Binding(
             get: { store.startupMessage != nil },
             set: { if !$0 { store.startupMessage = nil } }

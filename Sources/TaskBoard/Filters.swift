@@ -8,11 +8,11 @@ enum DueCategory: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .overdue: return "已过期"
-        case .today: return "今天"
-        case .tomorrow: return "明天"
-        case .thisWeek: return "7 天内"
-        case .later: return "以后"
+        case .overdue: return String(localized: "已过期")
+        case .today: return String(localized: "今天")
+        case .tomorrow: return String(localized: "明天")
+        case .thisWeek: return String(localized: "7 天内")
+        case .later: return String(localized: "以后")
         }
     }
 
@@ -33,9 +33,9 @@ struct BoardFilter: Equatable {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .all: return "全部"
-            case .open: return "未完成"
-            case .done: return "已完成"
+            case .all: return String(localized: "全部")
+            case .open: return String(localized: "未完成")
+            case .done: return String(localized: "已完成")
             }
         }
     }
@@ -45,11 +45,11 @@ struct BoardFilter: Equatable {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .any: return "不限"
-            case .overdue: return "已过期"
-            case .today: return "今天到期"
-            case .week: return "7 天内到期"
-            case .none: return "没有截止日期"
+            case .any: return String(localized: "不限")
+            case .overdue: return String(localized: "已过期")
+            case .today: return String(localized: "今天到期")
+            case .week: return String(localized: "7 天内到期")
+            case .none: return String(localized: "没有截止日期")
             }
         }
     }

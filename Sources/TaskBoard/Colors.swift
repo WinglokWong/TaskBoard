@@ -42,48 +42,51 @@ struct RGBAColor: Codable, Hashable {
 }
 
 struct PaletteColor: Identifiable {
+    /// 稳定的标识，不随界面语言变化
+    let key: String
+    /// 当前语言下的显示名称
     let name: String
     let value: RGBAColor
-    var id: String { name }
+    var id: String { key }
 }
 
 enum Palette {
     static let presets: [PaletteColor] = [
         // 鲜艳
-        .init(name: "绿", value: RGBAColor(hex: 0x4BCE97)),
-        .init(name: "黄", value: RGBAColor(hex: 0xF5CD47)),
-        .init(name: "橙", value: RGBAColor(hex: 0xFEA362)),
-        .init(name: "红", value: RGBAColor(hex: 0xF87168)),
-        .init(name: "紫", value: RGBAColor(hex: 0x9F8FEF)),
-        .init(name: "蓝", value: RGBAColor(hex: 0x579DFF)),
-        .init(name: "天蓝", value: RGBAColor(hex: 0x6CC3E0)),
-        .init(name: "粉", value: RGBAColor(hex: 0xE774BB)),
+        .init(key: "green", name: String(localized: "绿", comment: "颜色名称"), value: RGBAColor(hex: 0x4BCE97)),
+        .init(key: "yellow", name: String(localized: "黄", comment: "颜色名称"), value: RGBAColor(hex: 0xF5CD47)),
+        .init(key: "orange", name: String(localized: "橙", comment: "颜色名称"), value: RGBAColor(hex: 0xFEA362)),
+        .init(key: "red", name: String(localized: "红", comment: "颜色名称"), value: RGBAColor(hex: 0xF87168)),
+        .init(key: "purple", name: String(localized: "紫", comment: "颜色名称"), value: RGBAColor(hex: 0x9F8FEF)),
+        .init(key: "blue", name: String(localized: "蓝", comment: "颜色名称"), value: RGBAColor(hex: 0x579DFF)),
+        .init(key: "sky", name: String(localized: "天蓝", comment: "颜色名称"), value: RGBAColor(hex: 0x6CC3E0)),
+        .init(key: "pink", name: String(localized: "粉", comment: "颜色名称"), value: RGBAColor(hex: 0xE774BB)),
         // 浅色
-        .init(name: "浅绿", value: RGBAColor(hex: 0xBAF3DB)),
-        .init(name: "浅黄", value: RGBAColor(hex: 0xF8E6A0)),
-        .init(name: "浅橙", value: RGBAColor(hex: 0xFEDEC8)),
-        .init(name: "浅红", value: RGBAColor(hex: 0xFFD5D2)),
-        .init(name: "浅紫", value: RGBAColor(hex: 0xDFD8FD)),
-        .init(name: "浅蓝", value: RGBAColor(hex: 0xCCE0FF)),
-        .init(name: "浅灰", value: RGBAColor(hex: 0xEBECF0)),
-        .init(name: "白", value: RGBAColor(hex: 0xFFFFFF)),
+        .init(key: "lightGreen", name: String(localized: "浅绿", comment: "颜色名称"), value: RGBAColor(hex: 0xBAF3DB)),
+        .init(key: "lightYellow", name: String(localized: "浅黄", comment: "颜色名称"), value: RGBAColor(hex: 0xF8E6A0)),
+        .init(key: "lightOrange", name: String(localized: "浅橙", comment: "颜色名称"), value: RGBAColor(hex: 0xFEDEC8)),
+        .init(key: "lightRed", name: String(localized: "浅红", comment: "颜色名称"), value: RGBAColor(hex: 0xFFD5D2)),
+        .init(key: "lightPurple", name: String(localized: "浅紫", comment: "颜色名称"), value: RGBAColor(hex: 0xDFD8FD)),
+        .init(key: "lightBlue", name: String(localized: "浅蓝", comment: "颜色名称"), value: RGBAColor(hex: 0xCCE0FF)),
+        .init(key: "lightGray", name: String(localized: "浅灰", comment: "颜色名称"), value: RGBAColor(hex: 0xEBECF0)),
+        .init(key: "white", name: String(localized: "白", comment: "颜色名称"), value: RGBAColor(hex: 0xFFFFFF)),
         // 深色
-        .init(name: "深绿", value: RGBAColor(hex: 0x1F845A)),
-        .init(name: "深黄", value: RGBAColor(hex: 0x946F00)),
-        .init(name: "深橙", value: RGBAColor(hex: 0xC25100)),
-        .init(name: "深红", value: RGBAColor(hex: 0xC9372C)),
-        .init(name: "深紫", value: RGBAColor(hex: 0x6E5DC6)),
-        .init(name: "深蓝", value: RGBAColor(hex: 0x0C66E4)),
-        .init(name: "灰", value: RGBAColor(hex: 0x626F86)),
-        .init(name: "墨", value: RGBAColor(hex: 0x172B4D)),
+        .init(key: "darkGreen", name: String(localized: "深绿", comment: "颜色名称"), value: RGBAColor(hex: 0x1F845A)),
+        .init(key: "darkYellow", name: String(localized: "深黄", comment: "颜色名称"), value: RGBAColor(hex: 0x946F00)),
+        .init(key: "darkOrange", name: String(localized: "深橙", comment: "颜色名称"), value: RGBAColor(hex: 0xC25100)),
+        .init(key: "darkRed", name: String(localized: "深红", comment: "颜色名称"), value: RGBAColor(hex: 0xC9372C)),
+        .init(key: "darkPurple", name: String(localized: "深紫", comment: "颜色名称"), value: RGBAColor(hex: 0x6E5DC6)),
+        .init(key: "darkBlue", name: String(localized: "深蓝", comment: "颜色名称"), value: RGBAColor(hex: 0x0C66E4)),
+        .init(key: "gray", name: String(localized: "灰", comment: "颜色名称"), value: RGBAColor(hex: 0x626F86)),
+        .init(key: "navy", name: String(localized: "墨", comment: "颜色名称"), value: RGBAColor(hex: 0x172B4D)),
     ]
 
     static func name(for color: RGBAColor) -> String? {
         presets.first(where: { $0.value.isClose(to: color) })?.name
     }
 
-    static func color(named name: String) -> RGBAColor? {
-        presets.first(where: { $0.name == name })?.value
+    static func color(_ key: String) -> RGBAColor? {
+        presets.first(where: { $0.key == key })?.value
     }
 }
 
@@ -91,7 +94,7 @@ enum Palette {
 struct ColorSwatchPicker: View {
     @Binding var selection: RGBAColor?
     var allowsNone = true
-    var noneHelp = "默认"
+    var noneHelp: LocalizedStringKey = "默认"
 
     private let columns = Array(repeating: GridItem(.fixed(26), spacing: 6), count: 8)
 

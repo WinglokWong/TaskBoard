@@ -7,7 +7,7 @@ VERSION="${VERSION:-1.0.0}"
 export VERSION
 ./build.sh
 
-APP="build/任务看板.app"
+APP="build/TaskBoard.app"
 DMG="build/TaskBoard-${VERSION}.dmg"
 STAGING="build/dmg-staging"
 

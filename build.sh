@@ -1,9 +1,10 @@
 #!/bin/zsh
-# 构建「任务看板.app」到 build/ 目录
+# 构建 TaskBoard.app 到 build/ 目录
+# （Finder 和程序坞中按语言显示为「任务看板」「任務看板」或「TaskBoard」）
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="任务看板"
+APP_NAME="TaskBoard"
 APP="build/${APP_NAME}.app"
 VERSION="${VERSION:-0.0.0-dev}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
@@ -27,6 +28,15 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/Mac
 
 ICONSET="build/AppIcon.iconset"
 rm -rf "$ICONSET"
+
+# 本地化：编译字符串目录，并复制各语言的 InfoPlist.strings（应用名称）
+xcrun xcstringstool compile Resources/Localizable.xcstrings --output-directory "$APP/Contents/Resources"
+# 源语言（简体中文）也需要一份字符串表，否则会退回到英文
+python3 scripts/source_strings.py Resources/Localizable.xcstrings "$APP/Contents/Resources/zh-Hans.lproj"
+for lproj in Resources/*.lproj; do
+    mkdir -p "$APP/Contents/Resources/$(basename "$lproj")"
+    cp "$lproj"/* "$APP/Contents/Resources/$(basename "$lproj")/"
+done
 swift scripts/make_icon.swift "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
@@ -44,7 +54,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
-    <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>
+    <key>LSHasLocalizedDisplayName</key><true/>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key><true/>
@@ -63,6 +76,23 @@ cat > "$APP/Contents/Info.plist" <<PLIST
             <key>UTTypeIdentifier</key><string>local.taskboard.column</string>
             <key>UTTypeDescription</key><string>TaskBoard List</string>
             <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key><string>local.taskboard.archive</string>
+            <key>UTTypeDescription</key><string>TaskBoard Export</string>
+            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+            <key>UTTypeIconFile</key><string>AppIcon</string>
+            <key>UTTypeTagSpecification</key>
+            <dict><key>public.filename-extension</key><array><string>taskboard</string></array></dict>
+        </dict>
+    </array>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>TaskBoard Export</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Owner</string>
+            <key>LSItemContentTypes</key><array><string>local.taskboard.archive</string></array>
         </dict>
     </array>
 </dict>

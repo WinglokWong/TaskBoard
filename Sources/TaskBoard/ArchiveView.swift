@@ -113,8 +113,8 @@ struct ArchiveView: View {
     }
 
     private func subtitle(_ card: Card) -> String {
-        let column = board?.columnName(card.columnID) ?? "已删除的列表"
-        let date = card.archivedAt?.formatted(date: .abbreviated, time: .shortened) ?? "-"
-        return "来自「\(column)」· 归档于 \(date)"
+        let column = board?.columnName(card.columnID) ?? String(localized: "已删除的列表")
+        let date = card.archivedAt?.appFormatted(date: .abbreviated, time: .shortened) ?? "-"
+        return String(localized: "来自「\(column)」· 归档于 \(date)")
     }
 }

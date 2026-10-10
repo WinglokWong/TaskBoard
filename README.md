@@ -2,7 +2,7 @@
 
 A lightweight, native macOS kanban board inspired by Trello, built with SwiftUI. It is single-user and fully offline: no account, no server, no sync. Everything stays on your Mac.
 
-The app's interface is in Chinese (app name: 任务看板).
+The interface is available in **English**, **Simplified Chinese** (任务看板) and **Traditional Chinese** (任務看板).
 
 ## Features
 
@@ -10,7 +10,7 @@ The app's interface is in Chinese (app name: 任务看板).
 - **Custom lists**:
   - A new board starts with To Do / In Progress / Done.
   - Add, delete and rename lists (double-click the title).
-  - Reorder lists by dragging the ≡ handle or the title. A blue bar shows where the list will land.
+  - Reorder lists by dragging a whole list (anywhere except on a card). The other lists slide aside to preview the new order, and releasing places the list there. Dropping outside the board or pressing Esc cancels.
 - **Cards**:
   - Each card has a title, a description and attachments.
   - Mark a card done with one click; it gets a check and a strikethrough.
@@ -24,7 +24,7 @@ The app's interface is in Chinese (app name: 任务看板).
 - **Markdown descriptions**:
   - Card descriptions render headings, lists, task lists, bold, italic, code, links, quotes and code blocks.
   - Double-click the description, or click **Edit** (编辑), to change it.
-- **Auto-archive**: per board, done cards can archive themselves 1, 3, 7 or 30 days after completion. Set it in the board's gear menu (看板设置).
+- **Auto-archive**: per board, done cards can archive themselves 1, 3, 7 or 30 days after completion. Set it in the board's gear menu (Board Settings).
 - **Archive**:
   - Archive single cards, or all done cards in a list at once.
   - Browse, search, restore or permanently delete archived cards.
@@ -64,16 +64,24 @@ The app's interface is in Chinese (app name: 任务看板).
   - Cards and lists animate when they move, appear or disappear.
   - Drop targets open up space while you drag.
   - With **Reduce Motion** turned on, movement is replaced by simple fades.
-- **Automatic updates**: since 1.3.0 the app updates itself through [Sparkle](https://sparkle-project.org). It checks daily, or on demand from **任务看板 → 检查更新…**.
+- **Three languages**:
+  - English, Simplified Chinese and Traditional Chinese, including dates, reminders and the app name.
+  - By default the app follows your system language. You can change it in **Settings → General**, or per app in System Settings → General → Language & Region → Applications.
+- **Settings window** (⌘,): language, default due time and reminder for new due dates, backup retention, data location, import/export, and update preferences.
+- **Import & export**:
+  - **Export a board** (board gear menu, sidebar right-click, or **File → Export Current Board…**) to a `.taskboard` file containing its lists, cards (including archived ones), labels and attachments. Importing it adds a new board and never touches existing ones.
+  - **Export all data** (**File → Export All Data…**) to move everything to another Mac. When importing, choose **Add as New Boards** or **Replace All Data**. Replacing backs up your current data first and can be undone with ⌘Z.
+  - Use **File → Import…** (⇧⌘I), or double-click a `.taskboard` file in Finder.
+- **Automatic updates**: since 1.3.0 the app updates itself through [Sparkle](https://sparkle-project.org). It checks daily, or on demand from **TaskBoard → Check for Updates…** or **Settings → Updates**.
 - **Auto-save & backups**:
   - Changes are written to disk automatically.
   - A backup is taken once a day, and the last 30 are kept.
-  - Use **File → Back Up Now** (立即备份) or **File → Restore from Backup…** (从备份恢复…) to manage them.
+  - Use **File → Back Up Now** or **File → Restore from Backup…** to manage them.
 
 ## Download & install
 
 1. Download `TaskBoard-x.y.z.dmg` from the [latest release](https://github.com/WinglokWong/TaskBoard/releases/latest).
-2. Open the DMG and drag **任务看板** into **Applications**.
+2. Open the DMG and drag **TaskBoard** into **Applications**. Finder shows it as 任务看板 or 任務看板 on Chinese systems.
 3. Open the app for the first time:
    - TaskBoard is not notarized by Apple, so macOS blocks it the first time with "Apple could not verify…".
    - Click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to the TaskBoard message.
@@ -82,12 +90,12 @@ The app's interface is in Chinese (app name: 任务看板).
    Alternatively, run this once in Terminal:
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/任务看板.app"
+   xattr -dr com.apple.quarantine "/Applications/TaskBoard.app"
    ```
 
 Runs on macOS 14 Sonoma or later, on both Apple Silicon and Intel Macs.
 
-From 1.3.0 on, new versions are offered inside the app, so you only need to install manually once. Versions 1.2.0 and earlier don't include the updater; download 1.3.0 or later once to get it.
+Upgrading from 1.3.x happens inside the app; your existing install keeps its current file name. From 1.3.0 on, new versions are offered inside the app, so you only need to install manually once. Versions 1.2.0 and earlier don't include the updater; download 1.3.0 or later once to get it.
 
 ## Requirements (for building)
 
@@ -100,7 +108,7 @@ From 1.3.0 on, new versions are offered inside the app, so you only need to inst
 ./build.sh
 ```
 
-This compiles a universal (arm64 + x86_64) release build, generates the app icon and packages everything into `build/任务看板.app` (ad-hoc signed). Drag it into `/Applications` to install.
+This compiles a universal (arm64 + x86_64) release build, generates the app icon and packages everything into `build/TaskBoard.app` (ad-hoc signed). Drag it into `/Applications` to install.
 
 To produce a distributable DMG:
 
@@ -109,6 +117,24 @@ VERSION=1.3.0 scripts/package_dmg.sh
 ```
 
 This writes `build/TaskBoard-1.3.0.dmg`.
+
+### Localization
+
+Interface strings live in [`Resources/Localizable.xcstrings`](Resources/Localizable.xcstrings), a String Catalog that Xcode can also edit. Simplified Chinese is the source language. English and Traditional Chinese translations are kept in [`scripts/translations.py`](scripts/translations.py). App names per language are in `Resources/*.lproj/InfoPlist.strings`.
+
+After changing interface text, run:
+
+```bash
+scripts/update_strings.sh
+```
+
+The script extracts every localizable string with the Swift compiler, syncs the catalog, and applies the translations. It lists any string that still needs an English or Traditional Chinese translation. `build.sh` compiles the catalog into the app. It also generates a Simplified Chinese table from the source strings with `scripts/source_strings.py`. Without that table, lookups made in code (such as "Today 2:00 PM" on due badges) would fall back to English on Simplified Chinese systems.
+
+To try a language without changing your settings:
+
+```bash
+open build/TaskBoard.app --args -AppleLanguages '(en)'
+```
 
 ### Releasing
 
@@ -153,7 +179,25 @@ All data lives in `~/Library/Application Support/TaskBoard/`:
 
 Loading is tolerant: missing or unknown fields fall back to defaults, so data saved by older versions keeps working. If `data.json` truly can't be read, the app keeps a copy in `Backups/` (marked as unreadable), starts a fresh board, and tells you where the copy is.
 
-Attachment files are not deleted right away when you remove a card or attachment, so undo and restore can still find them. Files no longer referenced by your data or by any backup are cleaned up on the next launch. Use **File → Show Data Folder in Finder** (在 Finder 中显示数据文件夹) to jump there.
+Attachment files are not deleted right away when you remove a card or attachment, so undo and restore can still find them. Files no longer referenced by your data or by any backup are cleaned up on the next launch. Use **File → Show Data Folder in Finder** to jump there.
+
+Backups only copy `data.json`; attachments stay in place. To move everything, including attachments, to another Mac, use **File → Export All Data…** instead.
+
+### The `.taskboard` file format
+
+A `.taskboard` file is a zip archive containing:
+
+| Entry | Contents |
+| --- | --- |
+| `manifest.json` | Format name, format version, kind (`board` or `library`), app version, export date |
+| `data.json` | One board, or all data |
+| `attachments/` | The attachment files referenced by the data |
+
+Imported files are treated as untrusted:
+
+- The zip's entry list is checked for absolute paths and `..` before anything is extracted.
+- Only the known entries are read, and attachment names must be plain file names.
+- Boards added on import get fresh IDs and freshly named attachment files, so they never collide with existing data.
 
 ## Project structure
 
@@ -177,11 +221,19 @@ Sources/TaskBoard/
 ├── Markdown.swift        # Lightweight Markdown renderer for descriptions
 ├── Motion.swift          # Shared animation timings (respects Reduce Motion)
 ├── Updater.swift         # Sparkle auto-update integration
+├── Localization.swift    # App language, locale and relaunch helpers
+├── SettingsView.swift    # Settings window (⌘,)
+├── Transfer.swift        # .taskboard export/import (file format, validation, re-identification)
+├── TransferDialogs.swift # Import confirmation and result dialogs
 └── ImageCache.swift      # Downsampled thumbnail cache
 scripts/make_icon.swift   # Draws the app icon
 scripts/package_dmg.sh    # Builds and packages a release DMG
 scripts/release.sh        # Full release: DMG, signing, GitHub release, appcast
 scripts/update_appcast.py # Adds a release entry to appcast.xml
+scripts/update_strings.sh # Extracts strings, syncs the catalog, applies translations
+scripts/translations.py   # English and Traditional Chinese translations
+scripts/apply_translations.py
+Resources/                # String Catalog and per-language InfoPlist.strings
 appcast.xml               # Sparkle update feed (written by release.sh)
 build.sh                  # Builds and packages the .app bundle
 ```

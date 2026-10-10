@@ -49,8 +49,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             for card in board.cards where !card.isDone && !card.isArchived {
                 guard let fire = card.reminderDate, let due = card.dueDate, fire > now else { continue }
                 let content = UNMutableNotificationContent()
-                content.title = card.title.isEmpty ? "卡片到期" : card.title
-                content.body = "截止时间：\(DueFormat.long(due)) · \(board.name)"
+                content.title = card.title.isEmpty ? String(localized: "卡片到期") : card.title
+                content.body = String(localized: "截止时间：\(DueFormat.long(due)) · \(board.name)")
                 content.sound = .default
                 content.userInfo = ["boardID": board.id.uuidString, "cardID": card.id.uuidString]
                 let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fire)
@@ -96,22 +96,25 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 }
 
 enum DueFormat {
-    private static let zh = Locale(identifier: "zh_CN")
+    private static var locale: Locale { AppLocale.current }
 
-    /// 卡片上的简短格式，例如「今天 14:00」「10月12日 09:00」
+    /// 卡片上的简短格式，例如「今天 14:00」「10月12日 09:00」/「Today 2:00 PM」「Oct 12 9:00 AM」
     static func short(_ date: Date, now: Date = Date()) -> String {
         let cal = Calendar.current
-        let time = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(zh))
-        if cal.isDateInToday(date) { return "今天 \(time)" }
-        if cal.isDateInTomorrow(date) { return "明天 \(time)" }
-        if cal.isDateInYesterday(date) { return "昨天 \(time)" }
+        let time = date.formatted(.dateTime.hour().minute().locale(locale))
+        if cal.isDateInToday(date) { return String(localized: "今天 \(time)") }
+        if cal.isDateInTomorrow(date) { return String(localized: "明天 \(time)") }
+        if cal.isDateInYesterday(date) { return String(localized: "昨天 \(time)") }
+        let day: String
         if cal.isDate(date, equalTo: now, toGranularity: .year) {
-            return date.formatted(.dateTime.month(.defaultDigits).day().locale(zh)) + " \(time)"
+            day = date.formatted(.dateTime.month(.abbreviated).day().locale(locale))
+        } else {
+            day = date.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
         }
-        return date.formatted(.dateTime.year().month(.defaultDigits).day().locale(zh)) + " \(time)"
+        return String(localized: "\(day) \(time)", comment: "日期 + 时间，例如“10月12日 09:00”")
     }
 
     static func long(_ date: Date) -> String {
-        date.formatted(.dateTime.year().month(.defaultDigits).day().weekday(.abbreviated).hour().minute().locale(zh))
+        date.formatted(.dateTime.year().month(.abbreviated).day().weekday(.abbreviated).hour().minute().locale(locale))
     }
 }

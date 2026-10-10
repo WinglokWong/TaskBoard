@@ -36,7 +36,7 @@ struct BackupsView: View {
                             .frame(width: 20)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
-                                Text(backup.date.formatted(date: .abbreviated, time: .shortened))
+                                Text(backup.date.appFormatted(date: .abbreviated, time: .shortened))
                                 if let label = label(for: backup) {
                                     Text(label)
                                         .font(.caption)
@@ -86,7 +86,7 @@ struct BackupsView: View {
                 if store.restore(from: backup) {
                     dismiss()
                 } else {
-                    errorMessage = "这个备份文件无法读取。"
+                    errorMessage = String(localized: "这个备份文件无法读取。")
                 }
             }
         } message: {
@@ -107,9 +107,9 @@ struct BackupsView: View {
             for backup in list {
                 if let data = Store.readBackup(backup) {
                     let cards = data.boards.reduce(0) { $0 + $1.cards.count }
-                    result[backup.url] = "\(data.boards.count) 个看板 · \(cards) 张卡片"
+                    result[backup.url] = String(localized: "\(data.boards.count) 个看板 · \(cards) 张卡片")
                 } else {
-                    result[backup.url] = "无法读取"
+                    result[backup.url] = String(localized: "无法读取")
                 }
             }
             DispatchQueue.main.async { summaries = result }
@@ -119,9 +119,10 @@ struct BackupsView: View {
     private func label(for backup: BackupInfo) -> String? {
         switch backup.note {
         case nil: return nil
-        case "manual": return "手动"
-        case "before-restore": return "恢复前"
-        case "unreadable": return "无法读取的原文件"
+        case "manual": return String(localized: "手动")
+        case "before-restore": return String(localized: "恢复前")
+        case "before-import": return String(localized: "导入前")
+        case "unreadable": return String(localized: "无法读取的原文件")
         case let other?: return other
         }
     }

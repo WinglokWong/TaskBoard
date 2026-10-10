@@ -188,7 +188,7 @@ struct CardEditorView: View {
                 Label("已归档", systemImage: "archivebox.fill")
                     .foregroundStyle(.orange)
             }
-            Text("创建于 \(draft.createdAt.formatted(date: .abbreviated, time: .shortened))")
+            Text("创建于 \(draft.createdAt.appFormatted(date: .abbreviated, time: .shortened))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -234,9 +234,8 @@ struct CardEditorView: View {
                 }
             } else {
                 Button {
-                    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-                    draft.dueDate = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)
-                    draft.reminderMinutes = 0
+                    draft.dueDate = DueDefaults.nextDueDate()
+                    draft.reminderMinutes = DueDefaults.reminderMinutes
                     NotificationManager.shared.requestAuthorization()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: refreshNotificationStatus)
                 } label: {
@@ -372,7 +371,7 @@ struct CardEditorView: View {
         .padding(14)
     }
 
-    private func section<Content: View>(_ title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
+    private func section<Content: View>(_ title: LocalizedStringKey, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: systemImage)
                 .font(.headline)

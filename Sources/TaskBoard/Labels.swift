@@ -134,8 +134,9 @@ struct LabelPickerView: View {
 
             Divider()
             Button {
-                let used = Set(labels.map { Palette.name(for: $0.color) ?? "" })
-                let color = Palette.presets.first(where: { !used.contains($0.name) })?.value ?? Palette.presets[0].value
+                let used = labels.map(\.color)
+                let color = Palette.presets.first(where: { preset in !used.contains { $0.isClose(to: preset.value) } })?.value
+                    ?? Palette.presets[0].value
                 editingID = store.addLabel(to: boardID, color: color)
             } label: {
                 Label("新建标签", systemImage: "plus")

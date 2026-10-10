@@ -57,7 +57,7 @@ final class KeyMonitor {
 struct ShortcutsView: View {
     @Environment(\.dismiss) private var dismiss
 
-    private let rows: [(String, String)] = [
+    private let rows: [(LocalizedStringKey, LocalizedStringKey)] = [
         ("↑ ↓ ← →", "在卡片之间移动选择"),
         ("鼠标悬停", "选中卡片"),
         ("Return", "打开选中的卡片"),
@@ -75,7 +75,8 @@ struct ShortcutsView: View {
             Label("键盘快捷键", systemImage: "keyboard")
                 .font(.title3.bold())
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
-                ForEach(rows, id: \.0) { key, action in
+                ForEach(rows.indices, id: \.self) { index in
+                    let (key, action) = rows[index]
                     GridRow {
                         Text(key)
                             .font(.system(.body, design: .rounded).weight(.semibold))

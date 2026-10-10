@@ -30,7 +30,10 @@ struct CardLabel: Identifiable, Codable, Hashable {
     var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { return trimmed }
-        return Palette.name(for: color).map { "\($0)色标签" } ?? "未命名标签"
+        if let colorName = Palette.name(for: color) {
+            return String(localized: "\(colorName)色标签", comment: "没有名称的标签，以颜色命名，例如“绿色标签”")
+        }
+        return String(localized: "未命名标签")
     }
 }
 
@@ -78,28 +81,28 @@ struct Card: Identifiable, Codable, Hashable {
 struct ReminderOption: Identifiable {
     let minutes: Int?
     let title: String
-    var id: String { title }
+    var id: Int { minutes ?? -1 }
 
     static let all: [ReminderOption] = [
-        .init(minutes: nil, title: "不提醒"),
-        .init(minutes: 0, title: "到期时"),
-        .init(minutes: 15, title: "提前 15 分钟"),
-        .init(minutes: 60, title: "提前 1 小时"),
-        .init(minutes: 24 * 60, title: "提前 1 天"),
+        .init(minutes: nil, title: String(localized: "不提醒")),
+        .init(minutes: 0, title: String(localized: "到期时")),
+        .init(minutes: 15, title: String(localized: "提前 15 分钟")),
+        .init(minutes: 60, title: String(localized: "提前 1 小时")),
+        .init(minutes: 24 * 60, title: String(localized: "提前 1 天")),
     ]
 }
 
 struct AutoArchiveOption: Identifiable {
     let days: Int?
     let title: String
-    var id: String { title }
+    var id: Int { days ?? -1 }
 
     static let all: [AutoArchiveOption] = [
-        .init(days: nil, title: "关闭"),
-        .init(days: 1, title: "完成 1 天后"),
-        .init(days: 3, title: "完成 3 天后"),
-        .init(days: 7, title: "完成 7 天后"),
-        .init(days: 30, title: "完成 30 天后"),
+        .init(days: nil, title: String(localized: "关闭")),
+        .init(days: 1, title: String(localized: "完成 1 天后")),
+        .init(days: 3, title: String(localized: "完成 3 天后")),
+        .init(days: 7, title: String(localized: "完成 7 天后")),
+        .init(days: 30, title: String(localized: "完成 30 天后")),
     ]
 }
 
@@ -130,8 +133,8 @@ struct Board: Identifiable, Codable, Hashable {
     }
 
     static var defaultLabels: [CardLabel] {
-        ["绿", "黄", "橙", "红", "紫", "蓝"].compactMap { name in
-            Palette.color(named: name).map { CardLabel(color: $0) }
+        ["green", "yellow", "orange", "red", "purple", "blue"].compactMap { key in
+            Palette.color(key).map { CardLabel(color: $0) }
         }
     }
 }
@@ -174,14 +177,15 @@ struct AppData: Codable, Equatable {
     }
 
     static var sample: AppData {
-        var board = Board.makeDefault(name: "我的看板")
+        // 示例看板使用当前界面语言
+        var board = Board.makeDefault(name: String(localized: "我的看板"))
         let todo = board.columns[0].id, doing = board.columns[1].id, done = board.columns[2].id
         board.cards = [
-            Card(columnID: todo, title: "欢迎使用任务看板 👋",
-                 details: "• 点击卡片可编辑标题、内容、颜色和附件\n• 拖拽卡片可在列表之间移动\n• 点击左侧圆圈标记完成\n• 右键卡片可快速设置颜色、归档或删除\n• 误操作可以用 ⌘Z 撤销"),
-            Card(columnID: todo, title: "双击列表名称可以重命名", color: Palette.color(named: "黄")),
-            Card(columnID: doing, title: "试试给卡片添加一张图片附件", color: Palette.color(named: "浅蓝")),
-            Card(columnID: done, title: "点击工具栏的调色板修改背景颜色", isDone: true),
+            Card(columnID: todo, title: String(localized: "欢迎使用任务看板 👋"),
+                 details: String(localized: "• 点击卡片可编辑标题、内容、颜色和附件\n• 拖拽卡片可在列表之间移动\n• 点击左侧圆圈标记完成\n• 右键卡片可快速设置颜色、归档或删除\n• 误操作可以用 ⌘Z 撤销")),
+            Card(columnID: todo, title: String(localized: "双击列表名称可以重命名"), color: Palette.color("yellow")),
+            Card(columnID: doing, title: String(localized: "试试给卡片添加一张图片附件"), color: Palette.color("lightBlue")),
+            Card(columnID: done, title: String(localized: "点击工具栏的调色板修改背景颜色"), isDone: true),
         ]
         return AppData(boards: [board], selectedBoardID: board.id)
     }
@@ -193,9 +197,9 @@ extension Board {
             name: name,
             background: RGBAColor(hex: 0x0C66E4),
             columns: [
-                BoardColumn(name: "待办"),
-                BoardColumn(name: "进行中"),
-                BoardColumn(name: "已完成"),
+                BoardColumn(name: String(localized: "待办")),
+                BoardColumn(name: String(localized: "进行中")),
+                BoardColumn(name: String(localized: "已完成")),
             ]
         )
     }
